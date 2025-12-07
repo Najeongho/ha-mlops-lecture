@@ -1,12 +1,16 @@
 # Lab 2-1: FastAPI Model Serving Dockerfile
 # ============================================
+# 
+# ✅ 수정: 멀티 플랫폼 지원 (AMD64/ARM64)
+# EKS는 AMD64를 사용하므로 명시적 플랫폼 지정 필요
 
-FROM python:3.9-slim
+FROM --platform=linux/amd64 python:3.9-slim
 
 # 메타데이터
 LABEL maintainer="MLOps Training"
 LABEL description="Iris Classification API with FastAPI"
-LABEL version="1.0.0"
+LABEL version="1.0.1"
+LABEL platform="linux/amd64"
 
 # 작업 디렉토리 설정
 WORKDIR /app

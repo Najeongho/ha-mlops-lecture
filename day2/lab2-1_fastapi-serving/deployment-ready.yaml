@@ -2,15 +2,15 @@
 # =============================================
 #
 # 사용법:
-#   1. ${ECR_REGISTRY}를 실제 ECR 레지스트리 주소로 변경
-#   2. ${NAMESPACE}를 자신의 네임스페이스로 변경
+#   1. 347880001135.dkr.ecr.ap-northeast-2.amazonaws.com를 실제 ECR 레지스트리 주소로 변경
+#   2. kubeflow-user00를 자신의 네임스페이스로 변경
 #   3. kubectl apply -f deployment.yaml
 
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: iris-api
-  namespace: ${NAMESPACE}  # 예: kubeflow-user01
+  namespace: kubeflow-user00
   labels:
     app: iris-api
     version: v1
@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
       - name: iris-api
-        image: ${ECR_REGISTRY}/mlops-training/iris-api:v1
+        image: 347880001135.dkr.ecr.ap-northeast-2.amazonaws.com/mlops-training/iris-api:v1
         imagePullPolicy: Always  # ✅ 수정: 컨테이너 내부로 이동
         ports:
         - containerPort: 8000
@@ -73,12 +73,12 @@ spec:
       restartPolicy: Always
 
 ---
-# 수평 확장을 위한 HPA
+# 수평 확장을 위한 HPA (선택)
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: iris-api-hpa
-  namespace: ${NAMESPACE}
+  namespace: kubeflow-user00
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
