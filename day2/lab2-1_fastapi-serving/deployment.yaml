@@ -1,0 +1,97 @@
+# Lab 2-1: Kubernetes Deployment for Iris API
+# =============================================
+#
+# 사용법:
+#   1. ${ECR_REGISTRY}를 실제 ECR 레지스트리 주소로 변경
+#   2. ${NAMESPACE}를 자신의 네임스페이스로 변경
+#   3. kubectl apply -f deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iris-api
+  namespace: ${NAMESPACE}  # 예: kubeflow-user01
+  labels:
+    app: iris-api
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: iris-api
+  template:
+    metadata:
+      labels:
+        app: iris-api
+        version: v1
+    spec:
+      containers:
+      - name: iris-api
+        image: ${ECR_REGISTRY}/mlops-training/iris-api:v1
+        ports:
+        - containerPort: 8000
+          protocol: TCP
+        
+        # 리소스 제한
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        
+        # 헬스체크 - Liveness Probe
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # 헬스체크 - Readiness Probe
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        
+        # 환경 변수
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: LOG_LEVEL
+          value: "INFO"
+      
+      # 이미지 풀 정책
+      imagePullPolicy: Always
+      
+      # 재시작 정책
+      restartPolicy: Always
+
+---
+# 수평 확장을 위한 HPA (선택)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: iris-api-hpa
+  namespace: ${NAMESPACE}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: iris-api
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70

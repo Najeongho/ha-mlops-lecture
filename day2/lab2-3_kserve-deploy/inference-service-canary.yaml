@@ -1,0 +1,76 @@
+# Lab 2-3: KServe Canary Deployment
+# ===================================
+#
+# Canary 배포 전략을 적용한 InferenceService
+#
+# 트래픽 분배:
+#   - Default (v1): 90%
+#   - Canary (v2): 10%
+#
+# 트래픽 조정:
+#   canaryTrafficPercent: 10 → 30 → 50 → 100
+
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: california-model
+  namespace: ${NAMESPACE}  # 예: kubeflow-user01
+spec:
+  predictor:
+    # ============================================
+    # Default 버전 (v1) - 90% 트래픽
+    # ============================================
+    sklearn:
+      storageUri: "s3://mlops-training-models/california/v1/model"
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+    
+    # ============================================
+    # Canary 설정 - 10% 트래픽
+    # ============================================
+    canaryTrafficPercent: 10
+    
+    canary:
+      sklearn:
+        storageUri: "s3://mlops-training-models/california/v2/model"
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+---
+# Canary 트래픽 조정 가이드
+# ===========================
+#
+# Step 1: 10% (초기 배포)
+# kubectl patch isvc california-model -n ${NAMESPACE} \
+#   --type='json' \
+#   -p='[{"op": "replace", "path": "/spec/predictor/canaryTrafficPercent", "value": 10}]'
+#
+# Step 2: 30% (모니터링 후)
+# kubectl patch isvc california-model -n ${NAMESPACE} \
+#   --type='json' \
+#   -p='[{"op": "replace", "path": "/spec/predictor/canaryTrafficPercent", "value": 30}]'
+#
+# Step 3: 50%
+# kubectl patch isvc california-model -n ${NAMESPACE} \
+#   --type='json' \
+#   -p='[{"op": "replace", "path": "/spec/predictor/canaryTrafficPercent", "value": 50}]'
+#
+# Step 4: 100% (Promotion)
+# kubectl patch isvc california-model -n ${NAMESPACE} \
+#   --type='json' \
+#   -p='[{"op": "replace", "path": "/spec/predictor/canaryTrafficPercent", "value": 100}]'
+#
+# Rollback: 0% (문제 발생 시)
+# kubectl patch isvc california-model -n ${NAMESPACE} \
+#   --type='json' \
+#   -p='[{"op": "replace", "path": "/spec/predictor/canaryTrafficPercent", "value": 0}]'

@@ -1,0 +1,197 @@
+# ============================================================
+# Day 3 프로젝트 - KServe InferenceService 배포 YAML
+# California Housing 예측 모델 배포
+#
+# 사용법:
+#   1. 변수 치환: TEAM_NAME, USER_NAMESPACE, S3_BUCKET, RUN_ID
+#   2. kubectl apply -f inference-service.yaml
+#
+# 현대오토에버 MLOps 교육
+# ============================================================
+
+---
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: ${TEAM_NAME}-housing-predictor    # 예: team-01-housing-predictor
+  namespace: ${USER_NAMESPACE}             # 예: kubeflow-user01
+  labels:
+    team: ${TEAM_NAME}
+    project: california-housing
+    version: v1
+    environment: production
+  annotations:
+    # Istio 사이드카 자동 주입
+    sidecar.istio.io/inject: "true"
+    # 최소 레플리카 유지
+    autoscaling.knative.dev/minScale: "1"
+    # 최대 레플리카 제한
+    autoscaling.knative.dev/maxScale: "3"
+spec:
+  predictor:
+    # sklearn 런타임 사용
+    sklearn:
+      # S3 모델 경로 (실제 값으로 치환 필요)
+      storageUri: "s3://${S3_BUCKET}/models/${TEAM_NAME}/${RUN_ID}/"
+      
+      # 리소스 요청 및 제한
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+      
+      # 런타임 버전 (선택사항)
+      # runtimeVersion: "1.3.0"
+
+---
+# ============================================================
+# Canary 배포 버전 (선택적 사용)
+# 새 모델 버전을 점진적으로 배포할 때 사용
+# ============================================================
+
+# apiVersion: serving.kserve.io/v1beta1
+# kind: InferenceService
+# metadata:
+#   name: ${TEAM_NAME}-housing-predictor-canary
+#   namespace: ${USER_NAMESPACE}
+#   labels:
+#     team: ${TEAM_NAME}
+#     project: california-housing
+#     version: v2
+#     deployment-type: canary
+# spec:
+#   predictor:
+#     # Canary 트래픽 비율 (10%)
+#     canaryTrafficPercent: 10
+#     sklearn:
+#       # 새 모델 버전 경로
+#       storageUri: "s3://${S3_BUCKET}/models/${TEAM_NAME}/${NEW_RUN_ID}/"
+#       resources:
+#         requests:
+#           cpu: "100m"
+#           memory: "256Mi"
+#         limits:
+#           cpu: "500m"
+#           memory: "512Mi"
+
+---
+# ============================================================
+# 테스트용 예제 데이터 ConfigMap
+# ============================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ${TEAM_NAME}-test-data
+  namespace: ${USER_NAMESPACE}
+  labels:
+    team: ${TEAM_NAME}
+    purpose: testing
+data:
+  # 단일 예측 요청 예시
+  single_request.json: |
+    {
+      "instances": [
+        [8.3252, 41.0, 6.984, 1.0238, 322.0, 2.555, 37.88, -122.23, 17.87, 0.146, 126.0, 3, 0]
+      ]
+    }
+  
+  # 배치 예측 요청 예시 (3개 샘플)
+  batch_request.json: |
+    {
+      "instances": [
+        [8.3252, 41.0, 6.984, 1.0238, 322.0, 2.555, 37.88, -122.23, 17.87, 0.146, 126.0, 3, 0],
+        [5.6431, 52.0, 5.817, 1.0731, 558.0, 2.547, 37.85, -122.25, 14.78, 0.173, 219.0, 3, 0],
+        [3.8462, 35.0, 5.136, 1.0017, 624.0, 2.418, 37.75, -122.41, 10.21, 0.154, 258.0, 2, 0]
+      ]
+    }
+  
+  # 피처 설명
+  feature_description.txt: |
+    California Housing 피처 순서 (13개):
+    
+    원본 피처 (8개):
+    1.  MedInc           - 중위 소득 (10,000달러 단위)
+    2.  HouseAge         - 주택 연식 (년)
+    3.  AveRooms         - 평균 방 개수
+    4.  AveBedrms        - 평균 침실 개수
+    5.  Population       - 블록 그룹 인구
+    6.  AveOccup         - 평균 거주자 수
+    7.  Latitude         - 위도
+    8.  Longitude        - 경도
+    
+    파생 피처 (5개):
+    9.  rooms_per_household       - 가구당 총 방 수
+    10. bedrooms_per_room         - 방당 침실 비율
+    11. population_per_household  - 가구당 인구
+    12. income_category           - 소득 구간 (1-5)
+    13. location_cluster          - 위치 클러스터 (0=SF, 1=LA)
+    
+    타겟 (예측값):
+    - MedHouseVal: 중위 주택 가격 (100,000달러 단위)
+
+---
+# ============================================================
+# 서비스 테스트를 위한 Job (선택적 사용)
+# ============================================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${TEAM_NAME}-api-test
+  namespace: ${USER_NAMESPACE}
+  labels:
+    team: ${TEAM_NAME}
+    purpose: testing
+spec:
+  ttlSecondsAfterFinished: 300  # 완료 후 5분 뒤 자동 삭제
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: api-tester
+        image: curlimages/curl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=============================================="
+          echo "KServe API 테스트 시작"
+          echo "=============================================="
+          
+          SERVICE_URL="http://${TEAM_NAME}-housing-predictor.${USER_NAMESPACE}.svc.cluster.local/v1/models/${TEAM_NAME}-housing-predictor:predict"
+          
+          echo ""
+          echo "📍 서비스 URL: $SERVICE_URL"
+          echo ""
+          
+          # 서비스 준비 대기
+          echo "⏳ 서비스 준비 대기 중..."
+          sleep 10
+          
+          # 단일 예측 테스트
+          echo ""
+          echo "🧪 단일 예측 테스트:"
+          echo "----------------------------------------------"
+          curl -s -X POST $SERVICE_URL \
+            -H "Content-Type: application/json" \
+            -d '{"instances": [[8.3252, 41.0, 6.984, 1.0238, 322.0, 2.555, 37.88, -122.23, 17.87, 0.146, 126.0, 3, 0]]}'
+          
+          echo ""
+          echo ""
+          
+          # 배치 예측 테스트
+          echo "🧪 배치 예측 테스트 (3개 샘플):"
+          echo "----------------------------------------------"
+          curl -s -X POST $SERVICE_URL \
+            -H "Content-Type: application/json" \
+            -d '{"instances": [[8.3252, 41.0, 6.984, 1.0238, 322.0, 2.555, 37.88, -122.23, 17.87, 0.146, 126.0, 3, 0], [5.6431, 52.0, 5.817, 1.0731, 558.0, 2.547, 37.85, -122.25, 14.78, 0.173, 219.0, 3, 0], [3.8462, 35.0, 5.136, 1.0017, 624.0, 2.418, 37.75, -122.41, 10.21, 0.154, 258.0, 2, 0]]}'
+          
+          echo ""
+          echo ""
+          echo "=============================================="
+          echo "✅ API 테스트 완료"
+          echo "=============================================="
