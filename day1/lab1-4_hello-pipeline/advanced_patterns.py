@@ -4,11 +4,13 @@
 - 슬라이드 85-86: 병렬 실행 (dsl.ParallelFor)
 
 현대오토에버 MLOps 교육
+
+⚠️ KFP v1 API 사용 (kfp==1.8.22)
 """
 
 from kfp import dsl
-from kfp.dsl import component, Input, Output, Dataset, Model, Metrics
-from typing import List
+from kfp.components import create_component_from_func
+from kfp import compiler
 
 
 # ============================================================
@@ -16,23 +18,16 @@ from typing import List
 # 슬라이드 84 - dsl.Condition 활용
 # ============================================================
 
-@component(
-    base_image="python:3.9-slim",
-    packages_to_install=["scikit-learn==1.3.2", "pandas==2.0.3"]
-)
-def train_model(
+@create_component_from_func
+def train_model_conditional(
     algorithm: str,
-    data_path: str,
-    model: Output[Model],
-    metrics: Output[Metrics]
+    data_path: str
 ) -> float:
     """모델 학습 및 정확도 반환"""
     from sklearn.datasets import load_iris
     from sklearn.model_selection import train_test_split
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.linear_model import LogisticRegression
-    import joblib
-    import json
     
     # 데이터 로드
     iris = load_iris()
@@ -50,36 +45,27 @@ def train_model(
     clf.fit(X_train, y_train)
     accuracy = clf.score(X_test, y_test)
     
-    # 모델 저장
-    joblib.dump(clf, model.path)
-    
-    # 메트릭 저장
-    metrics.log_metric("accuracy", accuracy)
-    metrics.log_metric("algorithm", algorithm)
-    
     print(f"Algorithm: {algorithm}, Accuracy: {accuracy:.4f}")
     return accuracy
 
 
-@component(base_image="python:3.9-slim")
-def deploy_to_production(model_path: str, accuracy: float) -> str:
+@create_component_from_func
+def deploy_to_production(accuracy: float) -> str:
     """프로덕션 배포 (정확도가 임계값 이상일 때)"""
     print(f"✅ 모델을 프로덕션에 배포합니다!")
-    print(f"   - 모델 경로: {model_path}")
     print(f"   - 정확도: {accuracy:.4f}")
     return f"Deployed with accuracy {accuracy:.4f}"
 
 
-@component(base_image="python:3.9-slim")
-def deploy_to_staging(model_path: str, accuracy: float) -> str:
+@create_component_from_func
+def deploy_to_staging(accuracy: float) -> str:
     """스테이징 배포 (정확도가 임계값 미만일 때)"""
     print(f"⚠️ 모델을 스테이징에 배포합니다. (추가 검증 필요)")
-    print(f"   - 모델 경로: {model_path}")
     print(f"   - 정확도: {accuracy:.4f}")
     return f"Staged for review with accuracy {accuracy:.4f}"
 
 
-@component(base_image="python:3.9-slim")
+@create_component_from_func
 def notify_failure(accuracy: float, threshold: float) -> str:
     """정확도 미달 알림"""
     print(f"❌ 모델 정확도가 기준 미달입니다.")
@@ -89,8 +75,8 @@ def notify_failure(accuracy: float, threshold: float) -> str:
 
 
 @dsl.pipeline(
-    name="conditional-deployment-pipeline",
-    description="조건부 분기를 활용한 모델 배포 파이프라인"
+    name='conditional-deployment-pipeline',
+    description='조건부 분기를 활용한 모델 배포 파이프라인'
 )
 def conditional_pipeline(
     algorithm: str = "random_forest",
@@ -120,37 +106,22 @@ def conditional_pipeline(
     """
     
     # Step 1: 모델 학습
-    train_task = train_model(
+    train_task = train_model_conditional(
         algorithm=algorithm,
         data_path="/data/iris"
     )
     
     # Step 2: 조건부 분기 - 프로덕션 배포
-    with dsl.Condition(
-        train_task.output >= accuracy_threshold,
-        name="check-production-ready"
-    ):
-        deploy_to_production(
-            model_path=train_task.outputs["model"],
-            accuracy=train_task.output
-        )
+    with dsl.Condition(train_task.output >= accuracy_threshold, name="check-production-ready"):
+        deploy_to_production(accuracy=train_task.output)
     
     # Step 3: 조건부 분기 - 스테이징 배포
-    with dsl.Condition(
-        (train_task.output < accuracy_threshold) & 
-        (train_task.output >= staging_threshold),
-        name="check-staging-ready"
-    ):
-        deploy_to_staging(
-            model_path=train_task.outputs["model"],
-            accuracy=train_task.output
-        )
+    with dsl.Condition(train_task.output < accuracy_threshold, name="check-staging"):
+        with dsl.Condition(train_task.output >= staging_threshold, name="check-staging-ready"):
+            deploy_to_staging(accuracy=train_task.output)
     
     # Step 4: 조건부 분기 - 실패 알림
-    with dsl.Condition(
-        train_task.output < staging_threshold,
-        name="check-failed"
-    ):
+    with dsl.Condition(train_task.output < staging_threshold, name="check-failed"):
         notify_failure(
             accuracy=train_task.output,
             threshold=staging_threshold
@@ -162,15 +133,12 @@ def conditional_pipeline(
 # 슬라이드 85-86 - dsl.ParallelFor 활용
 # ============================================================
 
-@component(
-    base_image="python:3.9-slim",
-    packages_to_install=["scikit-learn==1.3.2"]
-)
+@create_component_from_func
 def train_with_hyperparams(
     n_estimators: int,
     max_depth: int,
     experiment_name: str
-) -> dict:
+) -> str:
     """하이퍼파라미터 조합으로 모델 학습"""
     from sklearn.datasets import load_iris
     from sklearn.model_selection import cross_val_score
@@ -202,11 +170,11 @@ def train_with_hyperparams(
     print(f"[{experiment_name}] n_estimators={n_estimators}, "
           f"max_depth={max_depth}, accuracy={mean_score:.4f}±{std_score:.4f}")
     
-    return result
+    return json.dumps(result)
 
 
-@component(base_image="python:3.9-slim")
-def aggregate_results(results: List[dict]) -> dict:
+@create_component_from_func
+def aggregate_results(results: list) -> str:
     """모든 실험 결과를 집계하고 최적 조합 선택"""
     import json
     
@@ -217,7 +185,8 @@ def aggregate_results(results: List[dict]) -> dict:
     best_result = None
     best_accuracy = 0
     
-    for result in results:
+    for result_str in results:
+        result = json.loads(result_str)
         print(f"  [{result['experiment']}] "
               f"n_estimators={result['n_estimators']}, "
               f"max_depth={result['max_depth']}, "
@@ -234,12 +203,12 @@ def aggregate_results(results: List[dict]) -> dict:
     print(f"   - accuracy: {best_result['mean_accuracy']:.4f}")
     print("=" * 60)
     
-    return best_result
+    return json.dumps(best_result)
 
 
 @dsl.pipeline(
-    name="parallel-hyperparameter-search",
-    description="병렬 실행을 활용한 하이퍼파라미터 탐색 파이프라인"
+    name='parallel-hyperparameter-search',
+    description='병렬 실행을 활용한 하이퍼파라미터 탐색 파이프라인'
 )
 def parallel_pipeline():
     """
@@ -267,7 +236,7 @@ def parallel_pipeline():
     """
     
     # 하이퍼파라미터 그리드 정의
-    hyperparameter_grid = [
+    hyperparameter_configs = [
         {"n_estimators": 50, "max_depth": 3, "name": "exp-1-small"},
         {"n_estimators": 100, "max_depth": 5, "name": "exp-2-medium"},
         {"n_estimators": 200, "max_depth": 10, "name": "exp-3-large"},
@@ -277,27 +246,46 @@ def parallel_pipeline():
     ]
     
     # 병렬로 모든 하이퍼파라미터 조합 실험
-    with dsl.ParallelFor(
-        items=hyperparameter_grid,
-        parallelism=3  # 동시 실행 수 제한
-    ) as hp:
-        train_task = train_with_hyperparams(
-            n_estimators=hp.n_estimators,
-            max_depth=hp.max_depth,
-            experiment_name=hp.name
+    train_tasks = []
+    for config in hyperparameter_configs:
+        task = train_with_hyperparams(
+            n_estimators=config["n_estimators"],
+            max_depth=config["max_depth"],
+            experiment_name=config["name"]
         )
+        train_tasks.append(task)
     
     # 모든 결과 집계
-    aggregate_results(results=dsl.Collected(train_task.output))
+    aggregate_results(results=[t.output for t in train_tasks])
 
 
 # ============================================================
 # Part 3: 조건부 분기 + 병렬 실행 결합
 # ============================================================
 
+@create_component_from_func
+def train_single_model(algorithm: str) -> float:
+    """단일 모델 학습 (기본 설정)"""
+    from sklearn.datasets import load_iris
+    from sklearn.model_selection import train_test_split
+    from sklearn.ensemble import RandomForestClassifier
+    
+    iris = load_iris()
+    X_train, X_test, y_train, y_test = train_test_split(
+        iris.data, iris.target, test_size=0.2, random_state=42
+    )
+    
+    clf = RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42)
+    clf.fit(X_train, y_train)
+    accuracy = clf.score(X_test, y_test)
+    
+    print(f"Single model training completed. Accuracy: {accuracy:.4f}")
+    return accuracy
+
+
 @dsl.pipeline(
-    name="advanced-ml-pipeline",
-    description="조건부 분기와 병렬 실행을 결합한 고급 파이프라인"
+    name='advanced-ml-pipeline',
+    description='조건부 분기와 병렬 실행을 결합한 고급 파이프라인'
 )
 def advanced_pipeline(
     run_hyperparameter_search: bool = True,
@@ -331,27 +319,26 @@ def advanced_pipeline(
     # 하이퍼파라미터 탐색 여부에 따른 분기
     with dsl.Condition(run_hyperparameter_search == True, name="hp-search-enabled"):
         # 병렬 하이퍼파라미터 탐색
-        hp_grid = [
+        hp_configs = [
             {"n_estimators": 100, "max_depth": 5, "name": "config-1"},
             {"n_estimators": 200, "max_depth": 10, "name": "config-2"},
             {"n_estimators": 150, "max_depth": 7, "name": "config-3"},
         ]
         
-        with dsl.ParallelFor(items=hp_grid, parallelism=3) as hp:
-            parallel_train = train_with_hyperparams(
-                n_estimators=hp.n_estimators,
-                max_depth=hp.max_depth,
-                experiment_name=hp.name
+        train_tasks = []
+        for config in hp_configs:
+            task = train_with_hyperparams(
+                n_estimators=config["n_estimators"],
+                max_depth=config["max_depth"],
+                experiment_name=config["name"]
             )
+            train_tasks.append(task)
         
-        best = aggregate_results(results=dsl.Collected(parallel_train.output))
+        aggregate_results(results=[t.output for t in train_tasks])
     
     with dsl.Condition(run_hyperparameter_search == False, name="hp-search-disabled"):
         # 단일 학습 (기본 설정)
-        single_train = train_model(
-            algorithm="random_forest",
-            data_path="/data/iris"
-        )
+        train_single_model(algorithm="random_forest")
 
 
 # ============================================================
@@ -359,11 +346,14 @@ def advanced_pipeline(
 # ============================================================
 
 if __name__ == "__main__":
-    from kfp import compiler
     import os
     
     # 출력 디렉토리 생성
     os.makedirs("compiled", exist_ok=True)
+    
+    print("=" * 60)
+    print("  고급 파이프라인 패턴 컴파일")
+    print("=" * 60)
     
     # 1. 조건부 분기 파이프라인 컴파일
     compiler.Compiler().compile(
