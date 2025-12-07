@@ -1,77 +1,80 @@
 """
 Lab 1-4: Hello World Pipeline
-=============================
+==============================
 
-간단한 덧셈과 곱셈을 수행하는 첫 번째 Kubeflow Pipeline
+A simple pipeline that performs addition and multiplication operations.
 
-파이프라인 구조:
-    add(a, b) → multiply(sum, factor) → print_result(product)
+Pipeline Structure:
+    add(a, b) -> multiply(sum, factor) -> print_result(product)
 
-사용법:
+Usage:
     python hello_pipeline.py
 """
 
-from kfp.components import create_component_from_func
+import warnings
+warnings.filterwarnings('ignore')
+
+import kfp
 from kfp import dsl
 from kfp import compiler
 
 
 # ============================================================
-# Component 1: add - 두 숫자를 더합니다
+# Component 1: add - Add two numbers
 # ============================================================
 
-@create_component_from_func
+@dsl.component(base_image='python:3.11')
 def add(a: int, b: int) -> int:
     """
-    두 숫자를 더합니다.
+    Add two numbers.
     
     Args:
-        a: 첫 번째 숫자
-        b: 두 번째 숫자
+        a: First number
+        b: Second number
     
     Returns:
-        a + b의 결과
+        Sum of a and b
     """
     result = a + b
-    print(f"Add Component: {a} + {b} = {result}")
+    print(f"Add: {a} + {b} = {result}")
     return result
 
 
 # ============================================================
-# Component 2: multiply - 숫자에 factor를 곱합니다
+# Component 2: multiply - Multiply by a factor
 # ============================================================
 
-@create_component_from_func
+@dsl.component(base_image='python:3.11')
 def multiply(x: int, factor: int = 2) -> int:
     """
-    숫자에 factor를 곱합니다.
+    Multiply a number by a factor.
     
     Args:
-        x: 입력 숫자
-        factor: 곱할 값 (기본값: 2)
+        x: Input number
+        factor: Multiplier (default: 2)
     
     Returns:
-        x * factor의 결과
+        Product of x and factor
     """
     result = x * factor
-    print(f"Multiply Component: {x} * {factor} = {result}")
+    print(f"Multiply: {x} * {factor} = {result}")
     return result
 
 
 # ============================================================
-# Component 3: print_result - 최종 결과를 출력합니다
+# Component 3: print_result - Print final result
 # ============================================================
 
-@create_component_from_func
+@dsl.component(base_image='python:3.11')
 def print_result(value: int):
     """
-    최종 결과를 출력합니다.
+    Print the final result.
     
     Args:
-        value: 출력할 값
+        value: Value to print
     """
     print("=" * 50)
-    print(f"  🎉 Final Result: {value}")
+    print(f"Final Result: {value}")
     print("=" * 50)
 
 
@@ -81,7 +84,7 @@ def print_result(value: int):
 
 @dsl.pipeline(
     name='Hello World Pipeline',
-    description='간단한 덧셈과 곱셈을 수행하는 첫 번째 파이프라인'
+    description='Simple addition and multiplication pipeline'
 )
 def hello_pipeline(
     a: int = 3,
@@ -92,74 +95,61 @@ def hello_pipeline(
     Hello World Pipeline
     
     Args:
-        a: 첫 번째 숫자 (기본값: 3)
-        b: 두 번째 숫자 (기본값: 5)
-        factor: 곱할 값 (기본값: 2)
+        a: First number (default: 3)
+        b: Second number (default: 5)
+        factor: Multiplier (default: 2)
     
-    계산 과정:
+    Calculation:
         1. add: a + b
         2. multiply: (a + b) * factor
-        3. print_result: 결과 출력
+        3. print_result: Output result
     """
     
-    # Step 1: a + b 계산
+    # Step 1: Calculate a + b
     add_task = add(a=a, b=b)
     
-    # Step 2: (a + b) * factor 계산
+    # Step 2: Calculate (a + b) * factor
     multiply_task = multiply(
         x=add_task.output,
         factor=factor
     )
     
-    # Step 3: 결과 출력
+    # Step 3: Print result
     print_result(value=multiply_task.output)
 
 
 # ============================================================
-# Main - 컴파일 및 실행
+# Main - Compile Pipeline
 # ============================================================
 
 if __name__ == '__main__':
-    import kfp
-    
-    # 파이프라인 컴파일
     print("=" * 60)
+    print("  Lab 1-4: Hello World Pipeline")
+    print("=" * 60)
+    print(f"\nKFP Version: {kfp.__version__}")
+    
+    # Compile pipeline
+    print("\n" + "=" * 60)
     print("  Compiling Pipeline...")
     print("=" * 60)
     
-    pipeline_file = 'hello_pipeline.yaml'
+    pipeline_file = 'hello_pipeline_en.yaml'
     compiler.Compiler().compile(
         pipeline_func=hello_pipeline,
         package_path=pipeline_file
     )
-    print(f"✅ Pipeline compiled: {pipeline_file}")
     
-    # 파이프라인 실행 (Kubeflow 환경에서만)
-    try:
-        print("\n" + "=" * 60)
-        print("  Submitting Pipeline...")
-        print("=" * 60)
-        
-        client = kfp.Client()
-        
-        run = client.create_run_from_pipeline_func(
-            hello_pipeline,
-            arguments={
-                'a': 10,
-                'b': 20,
-                'factor': 3
-            },
-            experiment_name='hello-experiment',
-            run_name='hello-run'
-        )
-        
-        print(f"✅ Pipeline submitted!")
-        print(f"   Run ID: {run.run_id}")
-        print(f"   Expected Result: (10 + 20) * 3 = 90")
-        print("\n💡 Check the Kubeflow Dashboard → Runs to see the results")
-        
-    except Exception as e:
-        print(f"⚠️  Could not submit pipeline: {e}")
-        print("   Make sure you're running this inside Kubeflow Jupyter")
-        print(f"\n✅ Pipeline YAML file created: {pipeline_file}")
-        print("   You can upload this file manually via Kubeflow UI")
+    print(f"\nSuccess! File: {pipeline_file}")
+    
+    print("\n" + "=" * 60)
+    print("  Next Steps")
+    print("=" * 60)
+    print("\n1. Download 'hello_pipeline_en.yaml'")
+    print("2. Kubeflow Dashboard -> Pipelines -> Upload pipeline")
+    print("3. Upload the YAML file")
+    print("4. Create run with parameters:")
+    print("   - a: 10")
+    print("   - b: 20")
+    print("   - factor: 3")
+    print("5. Expected result: (10 + 20) * 3 = 90")
+    print("\n" + "=" * 60)
