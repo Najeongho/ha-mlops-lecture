@@ -1,23 +1,12 @@
-# Lab 2-1: Kubernetes Service for Iris API
-# ==========================================
-#
-# 사용법:
-#   1. ${NAMESPACE}를 자신의 네임스페이스로 변경
-#   2. kubectl apply -f service.yaml
-
 apiVersion: v1
 kind: Service
 metadata:
   name: iris-api-svc
-  namespace: ${NAMESPACE}  # 예: kubeflow-user01
-  labels:
-    app: iris-api
+  namespace: ${NAMESPACE}
 spec:
-  type: ClusterIP
   selector:
     app: iris-api
   ports:
-  - name: http
-    port: 80
+  - port: 80
     targetPort: 8000
-    protocol: TCP
+  type: ClusterIP
