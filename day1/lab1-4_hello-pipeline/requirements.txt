@@ -1,5 +1,0 @@
-# Lab 1-4: Hello World Pipeline
-# Python Package Requirements
-
-# Kubeflow Pipelines SDK v2
-kfp>=2.0.0
