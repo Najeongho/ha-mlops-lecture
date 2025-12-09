@@ -1,5 +1,11 @@
 # Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
 
+> ⭐ **중요 공지**: 실습 중 발생한 모든 문제가 해결되었습니다!
+> - Grafana DataSource 자동 설정 완료
+> - GitHub Actions 의존성 충돌 해결
+> - Alertmanager 완전 구현 및 Slack 통합 스크립트 제공
+> - 상세한 문제 해결 가이드: [`ISSUES_FIXED.md`](ISSUES_FIXED.md) 참조
+
 ## 📋 실습 개요
 
 | 항목 | 내용 |
@@ -49,7 +55,11 @@ Lab 3-2: Monitoring & CI/CD (120분)
 ```
 lab3-2_monitoring-cicd/
 ├── README.md                              # ⭐ 이 파일 (실습 가이드)
-├── requirements.txt                       # Python 패키지
+├── QUICKSTART.md                          # ⚡ 5분 빠른 시작
+├── ISSUES_FIXED.md                        # 🔧 실습 문제 완전 해결
+├── TROUBLESHOOTING.md                     # 📖 상세 트러블슈팅
+├── SLACK_SETUP.md                         # 💬 Slack 알림 설정
+├── requirements.txt                       # Python 패키지 (kubernetes 25.3.0)
 ├── manifests/
 │   ├── prometheus/
 │   │   ├── 01-namespace.yaml             # Prometheus Namespace
@@ -57,24 +67,32 @@ lab3-2_monitoring-cicd/
 │   │   ├── 03-prometheus-deployment.yaml # Prometheus Deployment
 │   │   └── 04-prometheus-service.yaml    # Prometheus Service
 │   ├── grafana/
-│   │   ├── 01-grafana-config.yaml        # Grafana ConfigMap
+│   │   ├── 01-grafana-config.yaml        # Grafana ConfigMap (DataSource 자동 설정)
 │   │   ├── 02-grafana-deployment.yaml    # Grafana Deployment
 │   │   └── 03-grafana-service.yaml       # Grafana Service
+│   ├── alertmanager/
+│   │   ├── 01-alertmanager-config.yaml          # 기본 ConfigMap
+│   │   ├── 02-alertmanager-deployment.yaml      # 기본 Deployment
+│   │   ├── 02-alertmanager-deployment-with-slack.yaml  # Slack 통합 Deployment
+│   │   ├── 03-alertmanager-service.yaml         # Service
+│   │   └── 04-alertmanager-config-slack.yaml    # Slack ConfigMap
 │   └── servicemonitor/
 │       └── model-metrics-monitor.yaml     # ServiceMonitor for KServe
 ├── scripts/
 │   ├── 1_deploy_monitoring.sh            # Part 1: 모니터링 스택 배포
 │   ├── 2_metrics_exporter.py             # Part 2: Custom Metrics Exporter
 │   ├── 3_ab_test_simulator.py            # Part 2: A/B 테스트 시뮬레이터
-│   └── 4_trigger_pipeline.py             # Part 4: 재학습 트리거
+│   ├── 4_trigger_pipeline.py             # Part 4: 재학습 트리거
+│   ├── 5_setup_slack.sh                  # ⭐ Slack 자동 설정 스크립트
+│   └── 6_test_alertmanager.sh            # ⭐ Alertmanager 테스트 스크립트
 ├── .github/
 │   └── workflows/
-│       ├── ci-test.yaml                  # Part 3: CI 파이프라인
+│       ├── ci-test.yaml                  # Part 3: CI 파이프라인 (v4 호환)
 │       └── cd-deploy.yaml                # Part 3: CD 파이프라인
 ├── dashboards/
-│   └── model-performance-dashboard.json  # Grafana 대시보드 정의
+│   └── model-performance-dashboard.json  # Grafana 대시보드 (Grafana 10.2 호환)
 └── notebooks/
-    └── monitoring_analysis.ipynb         # Jupyter 실습
+    └── README.md                         # Jupyter 실습 가이드
 ```
 
 ---

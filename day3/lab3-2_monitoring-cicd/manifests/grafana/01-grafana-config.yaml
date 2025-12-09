@@ -13,6 +13,10 @@ data:
         url: http://prometheus.monitoring.svc.cluster.local:9090
         isDefault: true
         editable: true
+        uid: prometheus
+        jsonData:
+          httpMethod: POST
+          timeInterval: 5s
 ---
 apiVersion: v1
 kind: ConfigMap
