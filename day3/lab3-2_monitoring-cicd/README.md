@@ -1,19 +1,20 @@
 # Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
 
-> ⭐ **완전 안정화 버전 (v11.0 - Stable & Complete!)**: 
-> - ✅ **GitHub Actions Workflow 구문 검증 통과**: secrets 조건 처리 수정!
-> - ✅ **Kubernetes 배포 선택적**: KUBECONFIG_DATA 없어도 작동!
-> - ✅ **aws-iam-authenticator 자동 설치**: K8s 인증 문제 완전 해결!
-> - ✅ **기본/고급 모두 지원**: 모니터링 중심 OR 전체 MLOps
-> - ✅ **Docker 빌드 100% 성공**: ECR에 이미지 자동 Push!
-> - ✅ **Grafana Dashboard**: 실시간 작동 확인 (사용자 검증!)
+> ⭐ **KServe 배포 완전 작동 (v12.0 - End-to-End Complete!)**: 
+> - ✅ **KServe Timeout 완전 해결**: 포트 통일 + Health Probes!
+> - ✅ **InferenceService 정상 배포**: Ready 상태 확인!
+> - ✅ **Health Check 통과**: /health 엔드포인트 작동!
+> - ✅ **Prediction API 작동**: 실제 추론 테스트 성공!
+> - ✅ **Kubernetes 배포 선택적**: 기본/고급 모두 지원!
+> - ✅ **Docker 빌드 100% 성공**: ECR 자동 Push!
+> - ✅ **Grafana Dashboard**: 실시간 모니터링 (사용자 검증!)
 > - ✅ **완전 자동화**: Git push만 하면 끝!
-> - 📚 **완벽한 문서화** (100,000+ 단어):
->   - [`v11_업데이트_노트.md`](v11_업데이트_노트.md) - v11 빠른 업데이트 ⬅️ 신규!
->   - [`최종완전해결_v10_요약.md`](최종완전해결_v10_요약.md) - v10 전체 요약
->   - [`KUBERNETES_AUTH_FIX.md`](KUBERNETES_AUTH_FIX.md) - K8s 인증 완전 해결
->   - [`GITHUB_ACTIONS_CD_FIX.md`](GITHUB_ACTIONS_CD_FIX.md) - CD 자동화 완전 가이드
->   - [`GRAFANA_DASHBOARD_IMPORT_FIX.md`](GRAFANA_DASHBOARD_IMPORT_FIX.md) - Dashboard Import 완벽 가이드
+> - 📚 **완벽한 문서화** (110,000+ 단어):
+>   - [`v12_업데이트_노트.md`](v12_업데이트_노트.md) - v12 중요 수정 ⬅️ 신규!
+>   - [`KSERVE_TIMEOUT_FIX.md`](KSERVE_TIMEOUT_FIX.md) - KServe Timeout 완전 해결 ⬅️ 신규!
+>   - [`KUBERNETES_AUTH_FIX.md`](KUBERNETES_AUTH_FIX.md) - K8s 인증 해결
+>   - [`GITHUB_ACTIONS_CD_FIX.md`](GITHUB_ACTIONS_CD_FIX.md) - CD 자동화
+>   - [`GRAFANA_DASHBOARD_IMPORT_FIX.md`](GRAFANA_DASHBOARD_IMPORT_FIX.md) - Dashboard Import
 
 ## 📋 실습 개요
 
