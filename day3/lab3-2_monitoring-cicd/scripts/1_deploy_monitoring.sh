@@ -48,8 +48,20 @@ kubectl apply -f manifests/grafana/03-grafana-service.yaml
 echo -e "${GREEN}✅ Service 'grafana' created${NC}"
 echo ""
 
-# Step 4: Pod 상태 확인
-echo -e "${BLUE}Step 4: Waiting for pods to be ready...${NC}"
+# Step 4: Alertmanager 배포
+echo -e "${BLUE}Step 4: Deploying Alertmanager...${NC}"
+kubectl apply -f manifests/alertmanager/01-alertmanager-config.yaml
+echo -e "${GREEN}✅ ConfigMap 'alertmanager-config' created${NC}"
+
+kubectl apply -f manifests/alertmanager/02-alertmanager-deployment.yaml
+echo -e "${GREEN}✅ Deployment 'alertmanager' created${NC}"
+
+kubectl apply -f manifests/alertmanager/03-alertmanager-service.yaml
+echo -e "${GREEN}✅ Service 'alertmanager' created${NC}"
+echo ""
+
+# Step 5: Pod 상태 확인
+echo -e "${BLUE}Step 5: Waiting for pods to be ready...${NC}"
 echo "This may take 1-2 minutes..."
 echo ""
 
@@ -60,9 +72,13 @@ echo -e "${GREEN}✅ Prometheus is ready${NC}"
 # Grafana Pod 대기
 kubectl wait --for=condition=ready pod -l app=grafana -n monitoring --timeout=300s
 echo -e "${GREEN}✅ Grafana is ready${NC}"
+
+# Alertmanager Pod 대기
+kubectl wait --for=condition=ready pod -l app=alertmanager -n monitoring --timeout=300s
+echo -e "${GREEN}✅ Alertmanager is ready${NC}"
 echo ""
 
-# Step 5: 배포 확인
+# Step 6: 배포 확인
 echo "============================================================"
 echo "  Monitoring Stack Deployed Successfully!"
 echo "============================================================"
@@ -73,8 +89,9 @@ kubectl get all -n monitoring
 echo ""
 
 echo -e "${YELLOW}Access URLs:${NC}"
-echo "  Prometheus: kubectl port-forward -n monitoring svc/prometheus 9090:9090"
-echo "  Grafana:    kubectl port-forward -n monitoring svc/grafana 3000:3000"
+echo "  Prometheus:   kubectl port-forward -n monitoring svc/prometheus 9090:9090"
+echo "  Grafana:      kubectl port-forward -n monitoring svc/grafana 3000:3000"
+echo "  Alertmanager: kubectl port-forward -n monitoring svc/alertmanager 9093:9093"
 echo ""
 
 echo -e "${YELLOW}Default Grafana Credentials:${NC}"
@@ -85,7 +102,9 @@ echo ""
 echo -e "${GREEN}Next Steps:${NC}"
 echo "  1. Access Prometheus UI: http://localhost:9090"
 echo "  2. Access Grafana UI: http://localhost:3000"
-echo "  3. Import dashboard from: dashboards/model-performance-dashboard.json"
+echo "  3. Access Alertmanager UI: http://localhost:9093"
+echo "  4. Import dashboard from: dashboards/model-performance-dashboard.json"
+echo "  5. Start metrics exporter: python scripts/2_metrics_exporter.py"
 echo ""
 
 echo "============================================================"

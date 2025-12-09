@@ -1,294 +1,491 @@
 {
-  "dashboard": {
-    "title": "ML Model Performance Dashboard",
-    "tags": ["ml", "monitoring", "ab-test"],
-    "timezone": "browser",
-    "schemaVersion": 38,
-    "version": 1,
-    "refresh": "5s",
-    "panels": [
+  "annotations": {
+    "list": [
       {
-        "id": 1,
-        "title": "Model MAE Score (Real-time)",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-        "targets": [
-          {
-            "expr": "model_mae_score{model_name=\"california-housing\", version=\"v1.0\"}",
-            "legendFormat": "Model A (v1.0)",
-            "refId": "A"
-          },
-          {
-            "expr": "model_mae_score{model_name=\"california-housing\", version=\"v2.0\"}",
-            "legendFormat": "Model B (v2.0)",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"label": "MAE Score", "format": "short"},
-          {"format": "short"}
-        ],
-        "xaxis": {"mode": "time"},
-        "lines": true,
-        "fill": 1,
-        "linewidth": 2,
-        "pointradius": 2,
-        "points": false,
-        "tooltip": {"shared": true, "sort": 0, "value_type": "individual"},
-        "legend": {"show": true, "values": true, "current": true, "avg": true},
-        "thresholds": [
-          {
-            "value": 0.40,
-            "colorMode": "critical",
-            "op": "gt",
-            "fill": true,
-            "line": true
-          }
-        ]
-      },
-      {
-        "id": 2,
-        "title": "Model R² Score",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-        "targets": [
-          {
-            "expr": "model_r2_score{model_name=\"california-housing\", version=\"v1.0\"}",
-            "legendFormat": "Model A (v1.0)",
-            "refId": "A"
-          },
-          {
-            "expr": "model_r2_score{model_name=\"california-housing\", version=\"v2.0\"}",
-            "legendFormat": "Model B (v2.0)",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"label": "R² Score", "format": "percentunit", "max": 1, "min": 0},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 3,
-        "title": "Prediction Latency (P95)",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(model_prediction_latency_bucket{version=\"v1.0\"}[5m]))",
-            "legendFormat": "Model A (P95)",
-            "refId": "A"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(model_prediction_latency_bucket{version=\"v2.0\"}[5m]))",
-            "legendFormat": "Model B (P95)",
-            "refId": "B"
-          }
-        ],
-        "yaxes": [
-          {"label": "Latency (seconds)", "format": "s"},
-          {"format": "short"}
-        ],
-        "thresholds": [
-          {
-            "value": 0.1,
-            "colorMode": "critical",
-            "op": "gt"
-          }
-        ]
-      },
-      {
-        "id": 4,
-        "title": "Requests per Second",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-        "targets": [
-          {
-            "expr": "rate(model_prediction_total{status=\"success\", version=\"v1.0\"}[1m])",
-            "legendFormat": "Model A (Success)",
-            "refId": "A"
-          },
-          {
-            "expr": "rate(model_prediction_total{status=\"success\", version=\"v2.0\"}[1m])",
-            "legendFormat": "Model B (Success)",
-            "refId": "B"
-          },
-          {
-            "expr": "rate(model_prediction_total{status=\"error\"}[1m])",
-            "legendFormat": "Errors",
-            "refId": "C"
-          }
-        ],
-        "yaxes": [
-          {"label": "RPS", "format": "ops"},
-          {"format": "short"}
-        ]
-      },
-      {
-        "id": 5,
-        "title": "Traffic Distribution (A/B Test)",
-        "type": "piechart",
-        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
-        "targets": [
-          {
-            "expr": "sum(model_prediction_total{version=\"v1.0\"})",
-            "legendFormat": "Model A (v1.0)",
-            "refId": "A"
-          },
-          {
-            "expr": "sum(model_prediction_total{version=\"v2.0\"})",
-            "legendFormat": "Model B (v2.0)",
-            "refId": "B"
-          }
-        ],
-        "options": {
-          "legend": {"displayMode": "table", "placement": "right", "values": ["value", "percent"]},
-          "pieType": "donut"
-        }
-      },
-      {
-        "id": 6,
-        "title": "Model Accuracy Score",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
-        "targets": [
-          {
-            "expr": "model_accuracy_score{model_name=\"california-housing\", version=\"v1.0\"}",
-            "refId": "A"
-          },
-          {
-            "expr": "model_accuracy_score{model_name=\"california-housing\", version=\"v2.0\"}",
-            "refId": "B"
-          }
-        ],
-        "options": {
-          "graphMode": "area",
-          "colorMode": "value",
-          "justifyMode": "auto",
-          "textMode": "value_and_name"
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
         },
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percentunit",
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {"value": 0, "color": "red"},
-                {"value": 0.75, "color": "yellow"},
-                {"value": 0.85, "color": "green"}
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": 7,
-        "title": "Alert Status",
-        "type": "stat",
-        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
-        "targets": [
-          {
-            "expr": "ALERTS{alertname=~\"ModelPerformanceDegraded|ModelLatencyHigh\"}",
-            "refId": "A"
-          }
-        ],
-        "options": {
-          "graphMode": "none",
-          "colorMode": "background",
-          "textMode": "name"
-        },
-        "fieldConfig": {
-          "defaults": {
-            "mappings": [
-              {"type": "value", "options": {"0": {"text": "OK", "color": "green"}}},
-              {"type": "value", "options": {"1": {"text": "ALERT", "color": "red"}}}
-            ]
-          }
-        }
-      },
-      {
-        "id": 8,
-        "title": "Error Rate",
-        "type": "graph",
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
-        "targets": [
-          {
-            "expr": "rate(model_prediction_errors_total[5m])",
-            "legendFormat": "{{error_type}} - {{version}}",
-            "refId": "A"
-          }
-        ],
-        "yaxes": [
-          {"label": "Errors/sec", "format": "ops"},
-          {"format": "short"}
-        ],
-        "alert": {
-          "name": "High Error Rate",
-          "conditions": [
-            {
-              "evaluator": {"params": [0.01], "type": "gt"},
-              "operator": {"type": "and"},
-              "query": {"params": ["A", "5m", "now"]},
-              "reducer": {"params": [], "type": "avg"},
-              "type": "query"
-            }
-          ],
-          "executionErrorState": "alerting",
-          "frequency": "1m",
-          "handler": 1,
-          "message": "Model error rate exceeded 1%",
-          "noDataState": "no_data"
-        }
-      },
-      {
-        "id": 9,
-        "title": "Model Performance Comparison",
-        "type": "table",
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
-        "targets": [
-          {
-            "expr": "model_mae_score{model_name=\"california-housing\"}",
-            "format": "table",
-            "instant": true,
-            "refId": "A"
-          },
-          {
-            "expr": "model_r2_score{model_name=\"california-housing\"}",
-            "format": "table",
-            "instant": true,
-            "refId": "B"
-          },
-          {
-            "expr": "histogram_quantile(0.95, rate(model_prediction_latency_bucket[5m]))",
-            "format": "table",
-            "instant": true,
-            "refId": "C"
-          }
-        ],
-        "transformations": [
-          {
-            "id": "merge",
-            "options": {}
-          },
-          {
-            "id": "organize",
-            "options": {
-              "excludeByName": {"Time": true, "job": true, "instance": true},
-              "indexByName": {"version": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3},
-              "renameByName": {
-                "version": "Model Version",
-                "Value #A": "MAE",
-                "Value #B": "R² Score",
-                "Value #C": "P95 Latency"
-              }
-            }
-          }
-        ]
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
       }
-    ],
-    "time": {"from": "now-30m", "to": "now"},
-    "timepicker": {
-      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"]
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "MAE Score",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.40
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_mae_score{model_name=\"california-housing\", version=\"v1.0\"}",
+          "legendFormat": "Model A (v1.0)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_mae_score{model_name=\"california-housing\", version=\"v2.0\"}",
+          "legendFormat": "Model B (v2.0)",
+          "refId": "B"
+        }
+      ],
+      "title": "Model MAE Score (Real-time)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "R² Score",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_r2_score{model_name=\"california-housing\", version=\"v1.0\"}",
+          "legendFormat": "Model A (v1.0)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_r2_score{model_name=\"california-housing\", version=\"v2.0\"}",
+          "legendFormat": "Model B (v2.0)",
+          "refId": "B"
+        }
+      ],
+      "title": "Model R² Score",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.38
+              },
+              {
+                "color": "red",
+                "value": 0.42
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_mae_score{model_name=\"california-housing\", version=\"v1.0\"}",
+          "legendFormat": "Model A MAE",
+          "refId": "A"
+        }
+      ],
+      "title": "Model A - Current MAE",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.38
+              },
+              {
+                "color": "red",
+                "value": 0.42
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "model_mae_score{model_name=\"california-housing\", version=\"v2.0\"}",
+          "legendFormat": "Model B MAE",
+          "refId": "A"
+        }
+      ],
+      "title": "Model B - Current MAE",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Total predictions per second for each model",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Requests/sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(model_prediction_total{status=\"success\", version=\"v1.0\"}[1m])",
+          "legendFormat": "Model A (Success)",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(model_prediction_total{status=\"success\", version=\"v2.0\"}[1m])",
+          "legendFormat": "Model B (Success)",
+          "refId": "B"
+        }
+      ],
+      "title": "Requests per Second",
+      "type": "timeseries"
     }
-  }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "ml",
+    "monitoring",
+    "ab-test"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ML Model Performance Dashboard",
+  "uid": "ml-model-performance",
+  "version": 1,
+  "weekStart": ""
 }
+

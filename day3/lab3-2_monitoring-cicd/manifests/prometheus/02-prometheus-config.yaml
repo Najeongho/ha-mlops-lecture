@@ -13,7 +13,8 @@ data:
     alerting:
       alertmanagers:
         - static_configs:
-            - targets: []
+            - targets:
+                - alertmanager.monitoring.svc.cluster.local:9093
 
     # Alert rules
     rule_files:
