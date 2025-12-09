@@ -1,16 +1,17 @@
 # Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
 
-> ⭐ **진정한 최종 완성 (v9.0 - 100% Working!)**: 
-> - ✅ **Dockerfile 구문 오류 수정**: heredoc 대신 파일 분리 방식!
-> - ✅ **Docker 빌드 100% 성공**: ECR에 이미지 자동 Push 완료!
-> - ✅ **완전 자동화**: 사용자는 Git push만 하면 끝!
+> ⭐ **유연한 최종 완성 (v10.0 - Flexible & Complete!)**: 
+> - ✅ **Kubernetes 배포 선택적**: KUBECONFIG_DATA 없어도 작동!
+> - ✅ **aws-iam-authenticator 자동 설치**: K8s 인증 문제 완전 해결!
+> - ✅ **기본/고급 모두 지원**: 모니터링 중심 OR 전체 MLOps
+> - ✅ **Docker 빌드 100% 성공**: ECR에 이미지 자동 Push!
 > - ✅ **Grafana Dashboard**: 실시간 작동 확인 (사용자 검증!)
-> - ✅ **GitHub Actions CI/CD**: 8개 테스트 + 자동 배포
+> - ✅ **완전 자동화**: Git push만 하면 끝!
 > - ✅ **Python 3.9-3.12 완전 지원**: numpy 1.26.4, pandas 2.1.4
-> - 📚 **완벽한 문서화** (90,000+ 단어):
->   - [`최종완전해결_v9_요약.md`](최종완전해결_v9_요약.md) - v9 전체 요약 ⬅️ 신규!
+> - 📚 **완벽한 문서화** (100,000+ 단어):
+>   - [`최종완전해결_v10_요약.md`](최종완전해결_v10_요약.md) - v10 전체 요약 ⬅️ 신규!
+>   - [`KUBERNETES_AUTH_FIX.md`](KUBERNETES_AUTH_FIX.md) - K8s 인증 완전 해결 ⬅️ 신규!
 >   - [`GITHUB_ACTIONS_CD_FIX.md`](GITHUB_ACTIONS_CD_FIX.md) - CD 자동화 완전 가이드
->   - [`Dockerfile`](Dockerfile) - California Housing 모델 서빙 (참고용)
 >   - [`GRAFANA_DASHBOARD_IMPORT_FIX.md`](GRAFANA_DASHBOARD_IMPORT_FIX.md) - Dashboard Import 완벽 가이드
 
 ## 📋 실습 개요

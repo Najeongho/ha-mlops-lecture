@@ -217,20 +217,53 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
           echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
+      - name: Check Kubernetes configuration
+        id: check-k8s
+        run: |
+          if [ -n "${{ secrets.KUBECONFIG_DATA }}" ]; then
+            echo "configured=true" >> $GITHUB_OUTPUT
+            echo "✅ Kubernetes configuration available"
+          else
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "⚠️  KUBECONFIG_DATA not configured - skipping K8s deployment"
+          fi
+
       - name: Set up kubectl
+        if: steps.check-k8s.outputs.configured == 'true'
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.28.0'
+      
+      - name: Install aws-iam-authenticator
+        if: steps.check-k8s.outputs.configured == 'true'
+        run: |
+          echo "📦 Installing aws-iam-authenticator..."
+          curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.14/aws-iam-authenticator_0.6.14_linux_amd64
+          chmod +x aws-iam-authenticator
+          sudo mv aws-iam-authenticator /usr/local/bin/
+          aws-iam-authenticator version
+          echo "✅ aws-iam-authenticator installed"
 
       - name: Configure kubectl
+        if: steps.check-k8s.outputs.configured == 'true'
         env:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
         run: |
           mkdir -p ~/.kube
           echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          echo "✅ Kubeconfig configured"
+          
+          # Verify connection
+          if kubectl cluster-info; then
+            echo "✅ Successfully connected to Kubernetes cluster"
+          else
+            echo "⚠️  Failed to connect to Kubernetes cluster"
+            exit 1
+          fi
 
       - name: Update KServe InferenceService
+        if: steps.check-k8s.outputs.configured == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ml-model-california-housing
@@ -271,6 +304,7 @@ jobs:
           EOF
 
       - name: Wait for deployment
+        if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -281,6 +315,7 @@ jobs:
             --timeout=300s
 
       - name: Test deployed model
+        if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -310,6 +345,7 @@ jobs:
             }'
 
       - name: Update traffic split (gradual rollout)
+        if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -320,9 +356,31 @@ jobs:
           echo "  1. Monitor metrics in Grafana for 30 minutes"
           echo "  2. If stable, increase to 50%: kubectl patch inferenceservice ..."
           echo "  3. If stable, increase to 100%: kubectl patch inferenceservice ..."
+      
+      - name: Skip Kubernetes deployment notice
+        if: steps.check-k8s.outputs.configured == 'false'
+        run: |
+          echo "⚠️  Kubernetes deployment skipped (KUBECONFIG_DATA not configured)"
+          echo ""
+          echo "✅ Successfully completed:"
+          echo "  - Docker image built: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          echo "  - Image pushed to ECR"
+          echo "  - Image scanned for vulnerabilities"
+          echo ""
+          echo "📝 To enable Kubernetes deployment:"
+          echo "  1. Configure KUBECONFIG_DATA secret in GitHub repository"
+          echo "  2. Ensure KServe is installed in your cluster"
+          echo "  3. Set KSERVE_NAMESPACE secret (default: kubeflow-user01)"
+          echo ""
+          echo "💡 For Lab 3-2, the monitoring stack is the main focus."
+          echo "   KServe deployment is an optional advanced feature."
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ml-model-california-housing
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
 
       - name: Send Slack notification
-        if: always()
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
@@ -365,7 +423,7 @@ jobs:
                 "footer_icon": "https://github.githubassets.com/favicon.ico",
                 "ts": '"$(date +%s)"'
               }]
-            }' || echo "Slack notification failed (webhook not configured)"
+            }'
 
       - name: Generate deployment summary
         if: always()
