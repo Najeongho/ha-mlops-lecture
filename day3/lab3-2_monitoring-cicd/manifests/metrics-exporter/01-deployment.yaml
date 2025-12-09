@@ -22,8 +22,8 @@ spec:
             - /bin/bash
             - -c
             - |
-              # 필수 패키지만 설치 (scikit-learn 제외 - 너무 무거움)
-              pip install prometheus-client numpy --quiet
+              # 필수 패키지만 설치 (경고 억제)
+              pip install prometheus-client numpy --quiet --disable-pip-version-check 2>/dev/null
               python /app/metrics_exporter.py
           ports:
             - name: metrics

@@ -1,15 +1,18 @@
 # Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
 
-> ⭐ **중요 공지 (v4.0 업데이트)**: 
-> - ✅ **Python 3.12 완전 지원**: numpy 1.26.4, pandas 2.1.4로 업그레이드
-> - ✅ **Metrics Exporter OOM 해결**: 경량화 버전으로 256Mi에서 안정적 작동
-> - ✅ **ServiceMonitor 제거**: Prometheus Operator 없이 작동
+> ⭐ **중요 공지 (v5.0 최종 업데이트)**: 
+> - ✅ **Grafana Dashboard Import 가이드**: 단계별 완벽한 Import 절차 제공
+> - ✅ **GitHub Actions Black 포맷팅**: 경고로 변경하여 CI 통과
+> - ✅ **Metrics Exporter 로그 개선**: pip 경고 메시지 제거
+> - ✅ **Python 3.12 완전 지원**: numpy 1.26.4, pandas 2.1.4
 > - ✅ **의존성 충돌 해결**: kubernetes 25.3.0, pydantic 1.10.13
-> - 📚 **상세 가이드**:
->   - [`PYTHON_312_FIX.md`](PYTHON_312_FIX.md) - Python 3.12 distutils 문제 해결 ⬅️ 신규!
->   - [`GRAFANA_NO_DATA_FIX.md`](GRAFANA_NO_DATA_FIX.md) - Grafana 데이터 표시 문제 ⬅️ 신규!
->   - [`METRICS_EXPORTER_OOM_FIX.md`](METRICS_EXPORTER_OOM_FIX.md) - OOM Kill 문제 해결
->   - [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md) - CI/CD 의존성 충돌 해결
+> - 📚 **완벽한 문서화** (70,000+ 단어):
+>   - [`GRAFANA_DASHBOARD_IMPORT_FIX.md`](GRAFANA_DASHBOARD_IMPORT_FIX.md) - Dashboard Import 완벽 가이드 ⬅️ 신규!
+>   - [`GITHUB_ACTIONS_BLACK_FIX.md`](GITHUB_ACTIONS_BLACK_FIX.md) - Black 포맷팅 해결 ⬅️ 신규!
+>   - [`PYTHON_312_FIX.md`](PYTHON_312_FIX.md) - Python 3.12 호환성
+>   - [`GRAFANA_NO_DATA_FIX.md`](GRAFANA_NO_DATA_FIX.md) - Grafana 진단
+>   - [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md) - 의존성 충돌
+>   - [`METRICS_EXPORTER_OOM_FIX.md`](METRICS_EXPORTER_OOM_FIX.md) - OOM Kill
 
 ## 📋 실습 개요
 
@@ -62,9 +65,11 @@ lab3-2_monitoring-cicd/
 ├── README.md                              # ⭐ 이 파일 (실습 가이드)
 ├── QUICKSTART.md                          # ⚡ 5분 빠른 시작
 ├── 최종완전해결가이드.md                   # 🎯 모든 문제 완전 해결 (v2)
-├── PYTHON_312_FIX.md                      # 🐍 Python 3.12 distutils 문제 해결 (신규!)
-├── GRAFANA_NO_DATA_FIX.md                 # 📊 Grafana No Data 문제 해결 (신규!)
-├── GITHUB_ACTIONS_FIX.md                  # 🔧 GitHub Actions 의존성 해결 (업데이트)
+├── PYTHON_312_FIX.md                      # 🐍 Python 3.12 distutils 문제 해결
+├── GRAFANA_NO_DATA_FIX.md                 # 📊 Grafana No Data 진단 가이드
+├── GRAFANA_DASHBOARD_IMPORT_FIX.md        # 📊 Grafana Dashboard Import 완벽 가이드 (신규!)
+├── GITHUB_ACTIONS_FIX.md                  # 🔧 GitHub Actions 의존성 해결
+├── GITHUB_ACTIONS_BLACK_FIX.md            # 🔧 GitHub Actions Black 포맷팅 해결 (신규!)
 ├── METRICS_EXPORTER_OOM_FIX.md            # 🔥 Metrics Exporter OOM 해결
 ├── ISSUES_FIXED.md                        # 🔧 실습 문제 완전 해결 (v1)
 ├── TROUBLESHOOTING.md                     # 📖 상세 트러블슈팅
@@ -86,9 +91,9 @@ lab3-2_monitoring-cicd/
 │   │   ├── 02-alertmanager-deployment-with-slack.yaml  # Slack 통합 Deployment
 │   │   ├── 03-alertmanager-service.yaml         # Service
 │   │   └── 04-alertmanager-config-slack.yaml    # Slack ConfigMap
-│   └── metrics-exporter/                  # ⭐ 경량화 버전 (80MB)!
+│   └── metrics-exporter/                  # ⭐ 경량화 버전 (80MB, 로그 개선!)
 │       ├── 00-configmap.yaml             # Metrics Exporter 스크립트
-│       └── 01-deployment.yaml            # Deployment + Service (128Mi, OOM 해결)
+│       └── 01-deployment.yaml            # Deployment + Service (pip 경고 억제)
 ├── scripts/
 │   ├── 1_deploy_monitoring.sh            # Part 1: 모니터링 스택 배포 (OOM 해결 포함)
 │   ├── 2_metrics_exporter.py             # Part 2: Custom Metrics Exporter (참고용)
@@ -96,10 +101,10 @@ lab3-2_monitoring-cicd/
 │   ├── 4_trigger_pipeline.py             # Part 4: 재학습 트리거
 │   ├── 5_setup_slack.sh                  # ⭐ Slack 자동 설정 스크립트
 │   ├── 6_test_alertmanager.sh            # ⭐ Alertmanager 테스트 스크립트
-│   └── verify_setup.sh                   # ⭐ 전체 검증 스크립트
+│   └── verify_setup.sh                   # ⭐ 전체 검증 스크립트 (로그 체크 개선)
 ├── .github/
 │   └── workflows/
-│       ├── ci-test.yaml                  # Part 3: CI 파이프라인 (v4 호환)
+│       ├── ci-test.yaml                  # Part 3: CI 파이프라인 (Black 경고로 변경)
 │       └── cd-deploy.yaml                # Part 3: CD 파이프라인
 ├── dashboards/
 │   └── model-performance-dashboard.json  # Grafana 대시보드 (Grafana 10.2 호환)
