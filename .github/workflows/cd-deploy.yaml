@@ -39,7 +39,19 @@ jobs:
           echo "tag=v$(date +%Y%m%d)-${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "timestamp=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
 
+      - name: Check if Dockerfile exists
+        id: check-dockerfile
+        run: |
+          if [ -f "Dockerfile" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Dockerfile found"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Dockerfile not found - skipping Docker build"
+          fi
+
       - name: Build Docker image
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ml-model-california-housing
@@ -56,6 +68,7 @@ jobs:
             -f Dockerfile .
 
       - name: Scan image for vulnerabilities
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ml-model-california-housing
@@ -71,6 +84,7 @@ jobs:
           trivy image --severity HIGH,CRITICAL $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Push image to ECR
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ml-model-california-housing
@@ -81,11 +95,13 @@ jobs:
           echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Set up kubectl
+        if: steps.check-dockerfile.outputs.exists == 'true'
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.28.0'
 
       - name: Configure kubectl
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
         run: |
@@ -94,6 +110,7 @@ jobs:
           chmod 600 ~/.kube/config
 
       - name: Update KServe InferenceService
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ml-model-california-housing
@@ -134,6 +151,7 @@ jobs:
           EOF
 
       - name: Wait for deployment
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -144,6 +162,7 @@ jobs:
             --timeout=300s
 
       - name: Test deployed model
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -173,6 +192,7 @@ jobs:
             }'
 
       - name: Update traffic split (gradual rollout)
+        if: steps.check-dockerfile.outputs.exists == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
@@ -183,6 +203,16 @@ jobs:
           echo "  1. Monitor metrics in Grafana for 30 minutes"
           echo "  2. If stable, increase to 50%: kubectl patch inferenceservice ..."
           echo "  3. If stable, increase to 100%: kubectl patch inferenceservice ..."
+      
+      - name: Skip deployment notice
+        if: steps.check-dockerfile.outputs.exists == 'false'
+        run: |
+          echo "⚠️  Dockerfile not found - deployment skipped"
+          echo "This is expected for Lab 3-2 monitoring setup"
+          echo "To enable CD pipeline:"
+          echo "  1. Add Dockerfile to repository"
+          echo "  2. Configure AWS secrets (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION)"
+          echo "  3. Configure Kubernetes secret (KUBECONFIG_DATA)"
 
       - name: Send Slack notification
         if: always()
