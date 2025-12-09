@@ -380,11 +380,17 @@ jobs:
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
 
       - name: Send Slack notification
-        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        if: always()
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️  SLACK_WEBHOOK_URL not configured - skipping notification"
+            exit 0
+          fi
+          
           STATUS="${{ job.status }}"
           COLOR="good"
           if [ "$STATUS" != "success" ]; then
