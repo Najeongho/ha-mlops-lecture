@@ -1,107 +1,79 @@
-# 🚀 GitHub Actions CD - Dockerfile 문제 완전 해결
+# 🚀 GitHub Actions CD - Dockerfile 자동 생성 완전 해결
 
 ## ❌ 문제 상황
 
-GitHub Actions CD (Continuous Deployment) 파이프라인에서 "Build Docker image" 단계 실패:
+GitHub Actions CD (Continuous Deployment) 파이프라인에서 Dockerfile이 없어서 배포 실패:
 
 ```
-ERROR: failed to build: failed to solve: failed to read dockerfile: open Dockerfile: no such file or directory
-Error: Process completed with exit code 1
+⚠️  Dockerfile not found - skipping Docker build
+Build Docker image: Skipped
+Scan image for vulnerabilities: Skipped
+Push image to ECR: Skipped
 ```
+
+**결과:** ECR에 이미지 없음 ("현재 이미지 없음")
 
 ## 🔍 근본 원인
 
-**CD workflow가 Dockerfile을 찾지 못함!**
+**GitHub 저장소에 Dockerfile이 없음!**
 
 Lab 3-2는 **모니터링 시스템 구축**이 주 목적:
 - ✅ Prometheus, Grafana, Alertmanager 설정
 - ✅ Metrics Exporter 구현
 - ✅ CI 파이프라인 (테스트, 린팅)
-- ❌ Docker 이미지 빌드 & 배포 (Dockerfile 필요)
+- ❌ Dockerfile (저장소에 없음)
 
-CD workflow는 다음을 시도:
-1. Docker 이미지 빌드
-2. ECR에 Push
-3. KServe InferenceService 배포
-4. Canary deployment
-
-하지만 **Dockerfile이 없어서 첫 단계부터 실패!**
+사용자가 Dockerfile을 별도로 GitHub에 push해야 하는 번거로움 발생!
 
 ---
 
-## ✅ 해결 방법
+## ✅ 해결 방법 (v8 - 자동 생성!)
 
-### 해결책 1: Dockerfile 생성 (이미 적용됨!) ⭐
+### 완전 자동화된 해결책 ⭐
 
-**`Dockerfile`** 생성됨:
-
-**특징:**
-```dockerfile
-FROM python:3.9-slim
-
-# Build arguments for metadata
-ARG MODEL_VERSION=latest
-ARG BUILD_DATE
-ARG VCS_REF
-
-# FastAPI 기반 California Housing 모델 서빙
-# Features:
-# - Health check endpoint
-# - Prediction API
-# - Prometheus metrics
-# - Random Forest model (R² ~0.80)
-
-EXPOSE 8000
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-**내장 API 엔드포인트:**
-- `GET /`: Root endpoint (API 정보)
-- `GET /health`: Health check (model_loaded 확인)
-- `POST /predict`: 예측 API (8개 feature 입력)
-- `GET /metrics`: Prometheus metrics
-
-**모델:**
-- Dataset: California Housing
-- Algorithm: Random Forest (100 estimators)
-- Features: 8개 (MedInc, HouseAge, AveRooms, ...)
-- Performance: R² ~0.80
-
----
-
-### 해결책 2: CD Workflow 조건부 실행 (이미 적용됨!)
-
-**`.github/workflows/cd-deploy.yaml`** 수정:
+**CD workflow가 Dockerfile을 자동으로 생성!**
 
 ```yaml
+# .github/workflows/cd-deploy.yaml
+
 - name: Check if Dockerfile exists
   id: check-dockerfile
   run: |
     if [ -f "Dockerfile" ]; then
       echo "exists=true" >> $GITHUB_OUTPUT
-      echo "✅ Dockerfile found"
+      echo "✅ Dockerfile found in repository"
     else
       echo "exists=false" >> $GITHUB_OUTPUT
-      echo "⚠️  Dockerfile not found - skipping Docker build"
+      echo "⚠️  Dockerfile not found - will generate automatically"
     fi
 
-- name: Build Docker image
-  if: steps.check-dockerfile.outputs.exists == 'true'
-  # ... Docker build steps
-
-- name: Skip deployment notice
+- name: Generate Dockerfile (if not exists)
   if: steps.check-dockerfile.outputs.exists == 'false'
   run: |
-    echo "⚠️  Dockerfile not found - deployment skipped"
-    echo "To enable CD pipeline:"
-    echo "  1. Add Dockerfile to repository"
-    echo "  2. Configure AWS secrets"
-    echo "  3. Configure Kubernetes secret"
+    echo "📝 Generating Dockerfile for California Housing model..."
+    cat > Dockerfile << 'EOF'
+    # Auto-generated Dockerfile
+    FROM python:3.9-slim
+    
+    # ... (전체 Dockerfile 내용)
+    
+    CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+    EOF
+    
+    echo "✅ Dockerfile generated successfully"
+
+- name: Build Docker image
+  # 항상 실행! (Dockerfile이 생성되거나 이미 존재)
+  env:
+    ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+  run: |
+    docker build -t $ECR_REGISTRY/ml-model-california-housing:$IMAGE_TAG .
 ```
 
 **효과:**
-- ✅ Dockerfile 있으면 → 전체 배포 실행
-- ✅ Dockerfile 없으면 → 안내 메시지만 표시, CI는 계속
+- ✅ Dockerfile 없어도 → 자동 생성 → 전체 CD 실행
+- ✅ Dockerfile 있으면 → 기존 것 사용 → 전체 CD 실행
+- ✅ 사용자는 아무것도 안 해도 됨!
 
 ---
 
