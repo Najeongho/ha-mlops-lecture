@@ -1,10 +1,15 @@
 # Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
 
-> ⭐ **중요 공지**: 실습 중 발생한 모든 문제가 해결되었습니다!
-> - Grafana DataSource 자동 설정 완료
-> - GitHub Actions 의존성 충돌 해결
-> - Alertmanager 완전 구현 및 Slack 통합 스크립트 제공
-> - 상세한 문제 해결 가이드: [`ISSUES_FIXED.md`](ISSUES_FIXED.md) 참조
+> ⭐ **중요 공지 (v4.0 업데이트)**: 
+> - ✅ **Python 3.12 완전 지원**: numpy 1.26.4, pandas 2.1.4로 업그레이드
+> - ✅ **Metrics Exporter OOM 해결**: 경량화 버전으로 256Mi에서 안정적 작동
+> - ✅ **ServiceMonitor 제거**: Prometheus Operator 없이 작동
+> - ✅ **의존성 충돌 해결**: kubernetes 25.3.0, pydantic 1.10.13
+> - 📚 **상세 가이드**:
+>   - [`PYTHON_312_FIX.md`](PYTHON_312_FIX.md) - Python 3.12 distutils 문제 해결 ⬅️ 신규!
+>   - [`GRAFANA_NO_DATA_FIX.md`](GRAFANA_NO_DATA_FIX.md) - Grafana 데이터 표시 문제 ⬅️ 신규!
+>   - [`METRICS_EXPORTER_OOM_FIX.md`](METRICS_EXPORTER_OOM_FIX.md) - OOM Kill 문제 해결
+>   - [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md) - CI/CD 의존성 충돌 해결
 
 ## 📋 실습 개요
 
@@ -57,11 +62,14 @@ lab3-2_monitoring-cicd/
 ├── README.md                              # ⭐ 이 파일 (실습 가이드)
 ├── QUICKSTART.md                          # ⚡ 5분 빠른 시작
 ├── 최종완전해결가이드.md                   # 🎯 모든 문제 완전 해결 (v2)
-├── GITHUB_ACTIONS_FIX.md                  # 🔧 GitHub Actions 의존성 해결
+├── PYTHON_312_FIX.md                      # 🐍 Python 3.12 distutils 문제 해결 (신규!)
+├── GRAFANA_NO_DATA_FIX.md                 # 📊 Grafana No Data 문제 해결 (신규!)
+├── GITHUB_ACTIONS_FIX.md                  # 🔧 GitHub Actions 의존성 해결 (업데이트)
+├── METRICS_EXPORTER_OOM_FIX.md            # 🔥 Metrics Exporter OOM 해결
 ├── ISSUES_FIXED.md                        # 🔧 실습 문제 완전 해결 (v1)
 ├── TROUBLESHOOTING.md                     # 📖 상세 트러블슈팅
 ├── SLACK_SETUP.md                         # 💬 Slack 알림 설정
-├── requirements.txt                       # Python 패키지 (kfp 1.8.22, kubernetes 25.3.0)
+├── requirements.txt                       # Python 패키지 (Python 3.9-3.12 호환)
 ├── manifests/
 │   ├── prometheus/
 │   │   ├── 01-namespace.yaml             # Prometheus Namespace
@@ -78,11 +86,11 @@ lab3-2_monitoring-cicd/
 │   │   ├── 02-alertmanager-deployment-with-slack.yaml  # Slack 통합 Deployment
 │   │   ├── 03-alertmanager-service.yaml         # Service
 │   │   └── 04-alertmanager-config-slack.yaml    # Slack ConfigMap
-│   └── metrics-exporter/                  # ⭐ 새로 추가!
+│   └── metrics-exporter/                  # ⭐ 경량화 버전 (80MB)!
 │       ├── 00-configmap.yaml             # Metrics Exporter 스크립트
-│       └── 01-deployment.yaml            # Deployment + Service (자동 실행)
+│       └── 01-deployment.yaml            # Deployment + Service (128Mi, OOM 해결)
 ├── scripts/
-│   ├── 1_deploy_monitoring.sh            # Part 1: 모니터링 스택 배포
+│   ├── 1_deploy_monitoring.sh            # Part 1: 모니터링 스택 배포 (OOM 해결 포함)
 │   ├── 2_metrics_exporter.py             # Part 2: Custom Metrics Exporter (참고용)
 │   ├── 3_ab_test_simulator.py            # Part 2: A/B 테스트 시뮬레이터
 │   ├── 4_trigger_pipeline.py             # Part 4: 재학습 트리거
@@ -101,9 +109,14 @@ lab3-2_monitoring-cicd/
 
 ⚠️ **중요 공지**: 
 - **ServiceMonitor 제거**: Prometheus Operator 없이 작동하도록 수정 완료
-- **Metrics Exporter 자동화**: Kubernetes Deployment로 자동 실행
-- **GitHub Actions 수정 필요**: 저장소의 `requirements.txt`에서 `kubernetes==28.1.0` → `25.3.0` 변경
-- **상세 가이드**: [`최종완전해결가이드.md`](최종완전해결가이드.md) 및 [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md) 참조
+- **Metrics Exporter 최적화**: OOM 방지를 위해 경량화 (scikit-learn 제거)
+- **GitHub Actions 의존성 수정 필요**: 
+  - `kubernetes==28.1.0` → `25.3.0`
+  - `pydantic==2.5.2` → `1.10.13` ⬅️ 중요!
+- **상세 가이드**: 
+  - [`최종완전해결가이드.md`](최종완전해결가이드.md)
+  - [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md)
+  - [`METRICS_EXPORTER_OOM_FIX.md`](METRICS_EXPORTER_OOM_FIX.md) ⬅️ 신규!
 
 ---
 

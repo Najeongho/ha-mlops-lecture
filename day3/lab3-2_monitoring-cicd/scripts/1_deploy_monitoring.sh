@@ -62,11 +62,19 @@ echo ""
 
 # Step 5: Metrics Exporter 배포
 echo -e "${BLUE}Step 5: Deploying Metrics Exporter...${NC}"
+
+# 기존 deployment가 있으면 삭제 (OOM 문제 해결)
+if kubectl get deployment metrics-exporter -n monitoring &>/dev/null; then
+    echo "  Removing old metrics-exporter deployment..."
+    kubectl delete deployment metrics-exporter -n monitoring --wait=true
+    sleep 5
+fi
+
 kubectl apply -f manifests/metrics-exporter/00-configmap.yaml
 echo -e "${GREEN}✅ ConfigMap 'metrics-exporter-script' created${NC}"
 
 kubectl apply -f manifests/metrics-exporter/01-deployment.yaml
-echo -e "${GREEN}✅ Deployment 'metrics-exporter' created${NC}"
+echo -e "${GREEN}✅ Deployment 'metrics-exporter' created (lightweight version)${NC}"
 echo -e "${GREEN}✅ Service 'metrics-exporter' created${NC}"
 echo ""
 

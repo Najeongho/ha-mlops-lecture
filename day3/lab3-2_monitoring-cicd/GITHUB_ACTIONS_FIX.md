@@ -2,13 +2,22 @@
 
 ## ❌ 문제 상황
 
-GitHub Actions에서 계속 `kubernetes==28.1.0` 의존성 충돌 발생:
+GitHub Actions에서 2가지 의존성 충돌 발생:
 
+**충돌 1: kubernetes 버전**
 ```
 ERROR: Cannot install kfp 1.8.22 and kubernetes==28.1.0
 The conflict is caused by:
     The user requested kubernetes==28.1.0
     kfp 1.8.22 depends on kubernetes<26 and >=8.0.0
+```
+
+**충돌 2: pydantic 버전**
+```
+ERROR: Cannot install pydantic==2.5.2 and kfp==1.8.22
+The conflict is caused by:
+    The user requested pydantic==2.5.2
+    kfp 1.8.22 depends on pydantic<2 and >=1.8.2
 ```
 
 ## 🔍 근본 원인
@@ -17,10 +26,10 @@ The conflict is caused by:
 
 ```
 로컬 파일 (lab3-2 압축파일):
-├── requirements.txt  ✅ kubernetes==25.3.0
+├── requirements.txt  ✅ kubernetes==25.3.0, pydantic==1.10.13
 
 GitHub 저장소:
-├── requirements.txt  ❌ kubernetes==28.1.0  ← 이것이 문제!
+├── requirements.txt  ❌ kubernetes==28.1.0, pydantic==2.5.2  ← 문제!
 ```
 
 ## ✅ 해결 방법
@@ -41,24 +50,24 @@ https://github.com/YOUR_USERNAME/YOUR_REPO
 
 ```txt
 # Lab 3-2: Monitoring & CI/CD Requirements
-# Compatible with kfp 1.8.22 and Python 3.9
+# Compatible with Python 3.9-3.12
 
-# Kubeflow Pipelines (requires kubernetes<26)
+# Kubeflow Pipelines (requires kubernetes<26, pydantic<2)
 kfp==1.8.22
 
 # MLflow
 mlflow==2.9.2
 
-# Data Science
-scikit-learn==1.3.2
-pandas==2.0.3
-numpy==1.24.3
+# Data Science (Python 3.12 compatible)
+scikit-learn==1.4.0
+pandas==2.1.4
+numpy==1.26.4
 joblib==1.3.2
 
-# Model Serving
+# Model Serving (pydantic 1.x for kfp compatibility)
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.2
+pydantic==1.10.13
 
 # HTTP
 httpx==0.25.2
@@ -88,6 +97,9 @@ click==8.1.7
 # Testing
 pytest==7.4.3
 pytest-cov==4.1.0
+
+# Build tools (for Python 3.12 compatibility)
+setuptools>=65.0.0
 ```
 
 **4. Commit & Push:**
@@ -134,6 +146,7 @@ jobs:
           # 명시적으로 호환 버전 설치
           pip install kfp==1.8.22
           pip install kubernetes==25.3.0
+          pip install pydantic==1.10.13
           pip install mlflow==2.9.2
           pip install scikit-learn==1.3.2
           pip install pandas==2.0.3
@@ -156,6 +169,7 @@ jobs:
 # requirements-ci.txt
 kfp==1.8.22
 kubernetes==25.3.0
+pydantic==1.10.13
 mlflow==2.9.2
 scikit-learn==1.3.2
 pandas==2.0.3
@@ -193,6 +207,7 @@ pip list | grep -E "kfp|kubernetes"
 # 예상 출력:
 # kfp                    1.8.22
 # kubernetes             25.3.0
+# pydantic               1.10.13
 ```
 
 ---
@@ -205,6 +220,7 @@ pip list | grep -E "kfp|kubernetes"
 Run python -m pip install --upgrade pip
 ✅ Successfully installed kfp-1.8.22
 ✅ Successfully installed kubernetes-25.3.0
+✅ Successfully installed pydantic-1.10.13
 ✅ Successfully installed mlflow-2.9.2
 ...
 ✅ All tests passed
@@ -254,20 +270,21 @@ Run python -m pip install --upgrade pip
    - 로컬에서 수정해도 GitHub는 변경되지 않음
    - 반드시 GitHub 저장소에서 직접 수정
 
-2. **kfp 1.8.22 requires kubernetes<26**
-   - kubernetes 28.x는 절대 사용 불가
-   - kubernetes 25.3.0 사용 필수
+2. **kfp 1.8.22의 의존성 제약**
+   - kubernetes<26 필수
+   - pydantic<2 필수 (매우 중요!)
+   - 두 가지 모두 충족해야 설치 가능
 
 3. **버전 호환성**
    ```
-   kfp 1.8.22  →  kubernetes<26  ✅
-   kfp 2.15.2  →  kubernetes>=28  ✅
+   kfp 1.8.22  →  kubernetes<26, pydantic<2  ✅
+   kfp 2.15.2  →  kubernetes>=28, pydantic>=2  ✅
    ```
 
 4. **명확한 버전 지정이 중요**
    ```
-   ❌ kubernetes>=25.0.0
-   ✅ kubernetes==25.3.0
+   ❌ kubernetes>=25.0.0, pydantic>=1.0.0
+   ✅ kubernetes==25.3.0, pydantic==1.10.13
    ```
 
 ---

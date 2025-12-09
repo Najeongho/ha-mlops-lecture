@@ -22,7 +22,8 @@ spec:
             - /bin/bash
             - -c
             - |
-              pip install prometheus-client scikit-learn pandas numpy requests --quiet
+              # 필수 패키지만 설치 (scikit-learn 제외 - 너무 무거움)
+              pip install prometheus-client numpy --quiet
               python /app/metrics_exporter.py
           ports:
             - name: metrics
@@ -39,22 +40,26 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
+              memory: 128Mi
             limits:
               cpu: 500m
-              memory: 512Mi
+              memory: 256Mi
           livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
             httpGet:
               path: /metrics
               port: 8000
             initialDelaySeconds: 30
             periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /metrics
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
       volumes:
         - name: script
           configMap:
