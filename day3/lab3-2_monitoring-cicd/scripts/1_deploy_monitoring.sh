@@ -70,10 +70,10 @@ echo -e "${GREEN}✅ Deployment 'metrics-exporter' created${NC}"
 echo -e "${GREEN}✅ Service 'metrics-exporter' created${NC}"
 echo ""
 
-# Step 6: ServiceMonitor 배포
-echo -e "${BLUE}Step 6: Deploying ServiceMonitor...${NC}"
-kubectl apply -f manifests/servicemonitor/model-metrics-monitor.yaml
-echo -e "${GREEN}✅ ServiceMonitor 'model-metrics-monitor' created${NC}"
+# Step 6: Prometheus 재시작 (새로운 scrape config 적용)
+echo -e "${BLUE}Step 6: Restarting Prometheus to apply new config...${NC}"
+kubectl rollout restart deployment/prometheus -n monitoring
+echo -e "${GREEN}✅ Prometheus restarted${NC}"
 echo ""
 
 # Step 7: Pod 상태 확인

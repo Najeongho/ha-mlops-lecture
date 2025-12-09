@@ -56,14 +56,16 @@ Lab 3-2: Monitoring & CI/CD (120분)
 lab3-2_monitoring-cicd/
 ├── README.md                              # ⭐ 이 파일 (실습 가이드)
 ├── QUICKSTART.md                          # ⚡ 5분 빠른 시작
-├── ISSUES_FIXED.md                        # 🔧 실습 문제 완전 해결
+├── 최종완전해결가이드.md                   # 🎯 모든 문제 완전 해결 (v2)
+├── GITHUB_ACTIONS_FIX.md                  # 🔧 GitHub Actions 의존성 해결
+├── ISSUES_FIXED.md                        # 🔧 실습 문제 완전 해결 (v1)
 ├── TROUBLESHOOTING.md                     # 📖 상세 트러블슈팅
 ├── SLACK_SETUP.md                         # 💬 Slack 알림 설정
-├── requirements.txt                       # Python 패키지 (kubernetes 25.3.0)
+├── requirements.txt                       # Python 패키지 (kfp 1.8.22, kubernetes 25.3.0)
 ├── manifests/
 │   ├── prometheus/
 │   │   ├── 01-namespace.yaml             # Prometheus Namespace
-│   │   ├── 02-prometheus-config.yaml     # Prometheus ConfigMap
+│   │   ├── 02-prometheus-config.yaml     # Prometheus ConfigMap (metrics-exporter scrape 설정)
 │   │   ├── 03-prometheus-deployment.yaml # Prometheus Deployment
 │   │   └── 04-prometheus-service.yaml    # Prometheus Service
 │   ├── grafana/
@@ -76,15 +78,17 @@ lab3-2_monitoring-cicd/
 │   │   ├── 02-alertmanager-deployment-with-slack.yaml  # Slack 통합 Deployment
 │   │   ├── 03-alertmanager-service.yaml         # Service
 │   │   └── 04-alertmanager-config-slack.yaml    # Slack ConfigMap
-│   └── servicemonitor/
-│       └── model-metrics-monitor.yaml     # ServiceMonitor for KServe
+│   └── metrics-exporter/                  # ⭐ 새로 추가!
+│       ├── 00-configmap.yaml             # Metrics Exporter 스크립트
+│       └── 01-deployment.yaml            # Deployment + Service (자동 실행)
 ├── scripts/
 │   ├── 1_deploy_monitoring.sh            # Part 1: 모니터링 스택 배포
-│   ├── 2_metrics_exporter.py             # Part 2: Custom Metrics Exporter
+│   ├── 2_metrics_exporter.py             # Part 2: Custom Metrics Exporter (참고용)
 │   ├── 3_ab_test_simulator.py            # Part 2: A/B 테스트 시뮬레이터
 │   ├── 4_trigger_pipeline.py             # Part 4: 재학습 트리거
 │   ├── 5_setup_slack.sh                  # ⭐ Slack 자동 설정 스크립트
-│   └── 6_test_alertmanager.sh            # ⭐ Alertmanager 테스트 스크립트
+│   ├── 6_test_alertmanager.sh            # ⭐ Alertmanager 테스트 스크립트
+│   └── verify_setup.sh                   # ⭐ 전체 검증 스크립트
 ├── .github/
 │   └── workflows/
 │       ├── ci-test.yaml                  # Part 3: CI 파이프라인 (v4 호환)
@@ -94,6 +98,46 @@ lab3-2_monitoring-cicd/
 └── notebooks/
     └── README.md                         # Jupyter 실습 가이드
 ```
+
+⚠️ **중요 공지**: 
+- **ServiceMonitor 제거**: Prometheus Operator 없이 작동하도록 수정 완료
+- **Metrics Exporter 자동화**: Kubernetes Deployment로 자동 실행
+- **GitHub Actions 수정 필요**: 저장소의 `requirements.txt`에서 `kubernetes==28.1.0` → `25.3.0` 변경
+- **상세 가이드**: [`최종완전해결가이드.md`](최종완전해결가이드.md) 및 [`GITHUB_ACTIONS_FIX.md`](GITHUB_ACTIONS_FIX.md) 참조
+
+---
+
+## 🚀 빠른 시작 (5분)
+
+```bash
+# 1. 환경 변수 설정
+export USER_NUM="01"
+
+# 2. 전체 배포 (자동으로 모든 컴포넌트 배포)
+bash scripts/1_deploy_monitoring.sh
+
+# 3. 검증 (선택 - 모든 컴포넌트 상태 확인)
+bash scripts/verify_setup.sh
+
+# 4. 포트 포워딩 (3개 터미널)
+kubectl port-forward -n monitoring svc/prometheus 9090:9090    # 터미널 1
+kubectl port-forward -n monitoring svc/grafana 3000:3000       # 터미널 2
+kubectl port-forward -n monitoring svc/alertmanager 9093:9093  # 터미널 3
+
+# 5. Grafana 접속
+# - URL: http://localhost:3000
+# - Login: admin / admin123
+# - Import: dashboards/model-performance-dashboard.json
+
+# 6. Prometheus 확인
+# - URL: http://localhost:9090/targets
+# - metrics-exporter가 UP 상태여야 함
+```
+
+**✅ 성공 확인:**
+- ✅ Prometheus Targets: `metrics-exporter (1/1 up)`
+- ✅ Grafana Dashboard: 실시간 데이터 표시 (Model MAE, R² Score, RPS)
+- ✅ Metrics 생성: `curl http://localhost:8000/metrics`
 
 ---
 

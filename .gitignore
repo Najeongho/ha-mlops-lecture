@@ -2,3 +2,4 @@
 *.venv*
 *.joblib*
 *.pyc*
+*test_env*
