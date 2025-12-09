@@ -3,3 +3,4 @@
 *.joblib*
 *.pyc*
 *test_env*
+*.pytest_cache*
