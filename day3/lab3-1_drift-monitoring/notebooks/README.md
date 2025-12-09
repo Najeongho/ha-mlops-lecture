@@ -33,4 +33,4 @@ for col in reference_data.columns:
 
 ---
 
-© 2024 MLOps Training Lab 3-1
+© 2025 MLOps Training Lab 3-1

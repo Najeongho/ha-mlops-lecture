@@ -6,7 +6,7 @@ Lab 2-1: Iris 분류 모델 학습
 FastAPI 서빙을 위한 Iris 분류 모델을 학습합니다.
 
 Author: MLOps Training Team
-Date: 2024-12-09
+Date: 2025-12-09
 """
 
 import sys

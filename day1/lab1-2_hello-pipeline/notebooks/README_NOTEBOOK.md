@@ -359,4 +359,4 @@ print(f"마지막 저장 시간: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

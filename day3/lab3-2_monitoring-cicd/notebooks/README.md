@@ -95,4 +95,4 @@ print(result)
 
 ---
 
-© 2024 현대오토에버 MLOps Training - Lab 3-2
+© 2025 현대오토에버 MLOps Training - Lab 3-2

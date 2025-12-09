@@ -11,7 +11,7 @@ Endpoints:
     - POST /predict/batch : 배치 예측
 
 Author: MLOps Training Team
-Date: 2024-12-09
+Date: 2025-12-09
 """
 
 from fastapi import FastAPI, HTTPException

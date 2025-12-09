@@ -283,4 +283,4 @@ kubectl port-forward svc/minio-service -n kubeflow 9000:9000 9001:9001
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

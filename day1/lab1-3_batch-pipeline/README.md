@@ -166,7 +166,7 @@ aws s3 ls s3://mlops-training-data-user01/processed/customers_cleaned/ --recursi
 
 **예상 출력:**
 ```
-2024-12-08 14:00:00    123456 processed/customers_cleaned/part-0.parquet
+2025-12-08 14:00:00    123456 processed/customers_cleaned/part-0.parquet
 ```
 
 ---
@@ -389,4 +389,4 @@ pip install -r requirements.txt --no-cache-dir
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

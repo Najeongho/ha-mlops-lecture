@@ -589,4 +589,4 @@ kubectl describe deployment prometheus -n monitoring | grep -A 5 "Limits:"
 
 ---
 
-© 2024 현대오토에버 MLOps Training - 트러블슈팅 가이드
+© 2025 현대오토에버 MLOps Training - 트러블슈팅 가이드

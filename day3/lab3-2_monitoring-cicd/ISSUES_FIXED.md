@@ -658,4 +658,4 @@ kubectl describe pods -n monitoring
 
 ---
 
-© 2024 현대오토에버 MLOps Training - 문제 해결 완료
+© 2025 현대오토에버 MLOps Training - 문제 해결 완료

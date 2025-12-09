@@ -248,8 +248,3 @@ echo "=== Verification Complete ==="
 
 ---
 
-## 📞 문의
-
-설정 중 문제 발생 시:
-- Slack: #mlops-training
-- Email: support@example.com

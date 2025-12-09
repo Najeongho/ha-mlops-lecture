@@ -195,12 +195,12 @@ INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 INFO:     Started reloader process [12345] using StatReload
 INFO:     Started server process [12346]
 INFO:     Waiting for application startup.
-2024-12-09 10:00:00 - app.main - INFO - ============================================================
-2024-12-09 10:00:00 - app.main - INFO -   Iris Classification API 시작
-2024-12-09 10:00:00 - app.main - INFO - ============================================================
-2024-12-09 10:00:00 - app.main - INFO - 모델 로드 상태: ✅ 성공
-2024-12-09 10:00:00 - app.main - INFO - API 문서: http://localhost:8000/docs
-2024-12-09 10:00:00 - app.main - INFO - ============================================================
+2025-12-09 10:00:00 - app.main - INFO - ============================================================
+2025-12-09 10:00:00 - app.main - INFO -   Iris Classification API 시작
+2025-12-09 10:00:00 - app.main - INFO - ============================================================
+2025-12-09 10:00:00 - app.main - INFO - 모델 로드 상태: ✅ 성공
+2025-12-09 10:00:00 - app.main - INFO - API 문서: http://localhost:8000/docs
+2025-12-09 10:00:00 - app.main - INFO - ============================================================
 INFO:     Application startup complete.
 ```
 
@@ -825,6 +825,6 @@ Lab 2-1을 완료했다면 다음 실습으로 진행하세요:
 
 ---
 
-**작성일**: 2024-12-09  
+**작성일**: 2025-12-09  
 **Lab**: 2-1 FastAPI 모델 서빙  
 **버전**: 2.0 (Python 3.12 호환)

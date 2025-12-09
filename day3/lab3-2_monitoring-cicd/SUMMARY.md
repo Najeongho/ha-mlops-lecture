@@ -296,4 +296,4 @@ Day 3에 추가할 **Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라
 
 ---
 
-© 2024 현대오토에버 MLOps Training - Lab 3-2
+© 2025 현대오토에버 MLOps Training - Lab 3-2

@@ -389,10 +389,4 @@ pip install -r requirements.txt --force-reinstall
 
 ---
 
-## 📞 문의
-
-기술적 문의사항이 있으시면 Slack `#mlops-training` 채널로 문의해주세요.
-
----
-
-© 2024 MLOps Training Lab 3-1
+© 2025 MLOps Training Lab 3-1

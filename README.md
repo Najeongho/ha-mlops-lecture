@@ -130,11 +130,7 @@ python e2e_pipeline.py
 2. **리소스 정리**: 실습 후 반드시 리소스 정리 (`scripts/cleanup.sh`)
 3. **비용**: AWS 리소스는 비용이 발생하므로 미사용 시 정리
 
-## 📞 문의
-
-- **교육 담당**: xxx@hyundai-autoever.com
-- **기술 지원**: Slack #mlops-training
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

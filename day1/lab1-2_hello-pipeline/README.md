@@ -633,4 +633,4 @@ kubectl port-forward svc/ml-pipeline-ui -n kubeflow-user01 8080:80
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

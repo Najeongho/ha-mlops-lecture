@@ -882,4 +882,4 @@ kubectl top pods -n <NAMESPACE>
 
 ---
 
-© 2024 현대오토에버 MLOps Training
+© 2025 현대오토에버 MLOps Training

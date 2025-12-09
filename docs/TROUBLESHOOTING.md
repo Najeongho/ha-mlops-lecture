@@ -341,10 +341,3 @@ kubectl exec -it [pod-name] -n kubeflow-userXX -- /bin/bash
 
 ---
 
-## 📞 추가 도움
-
-해결되지 않는 문제:
-1. 에러 메시지 전체 복사
-2. 실행한 명령어 기록
-3. 스크린샷 첨부
-4. Slack #mlops-training 채널에 공유
