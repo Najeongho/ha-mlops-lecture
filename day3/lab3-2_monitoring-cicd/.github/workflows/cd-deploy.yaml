@@ -1,0 +1,251 @@
+name: CD - Deploy Model
+
+on:
+  workflow_run:
+    workflows: ["CI - Test Model"]
+    types: [ completed ]
+    branches: [ main ]
+
+jobs:
+  deploy:
+    name: Build and Deploy Model
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set image tag
+        id: image-tag
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          echo "tag=v$(date +%Y%m%d)-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ml-model-california-housing
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          echo "Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build \
+            --platform linux/amd64 \
+            --build-arg MODEL_VERSION=$IMAGE_TAG \
+            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            --build-arg VCS_REF=${{ github.sha }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            -f Dockerfile .
+
+      - name: Scan image for vulnerabilities
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ml-model-california-housing
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          # Install Trivy scanner
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+          
+          # Scan image
+          trivy image --severity HIGH,CRITICAL $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ml-model-california-housing
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Configure kubectl
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Update KServe InferenceService
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ml-model-california-housing
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+        run: |
+          cat <<EOF | kubectl apply -f -
+          apiVersion: serving.kserve.io/v1beta1
+          kind: InferenceService
+          metadata:
+            name: california-housing-predictor
+            namespace: ${NAMESPACE}
+            annotations:
+              serving.kserve.io/deploymentMode: RawDeployment
+          spec:
+            predictor:
+              minReplicas: 1
+              maxReplicas: 3
+              containers:
+                - name: kserve-container
+                  image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                  ports:
+                    - containerPort: 8080
+                      protocol: TCP
+                  env:
+                    - name: MODEL_NAME
+                      value: california-housing
+                    - name: MODEL_VERSION
+                      value: ${IMAGE_TAG}
+                  resources:
+                    requests:
+                      cpu: 500m
+                      memory: 1Gi
+                    limits:
+                      cpu: 1000m
+                      memory: 2Gi
+              canaryTrafficPercent: 10  # Start with 10% canary traffic
+          EOF
+
+      - name: Wait for deployment
+        env:
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+        run: |
+          echo "Waiting for InferenceService to be ready..."
+          kubectl wait --for=condition=Ready \
+            inferenceservice/california-housing-predictor \
+            -n ${NAMESPACE} \
+            --timeout=300s
+
+      - name: Test deployed model
+        env:
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+        run: |
+          # Get InferenceService URL
+          INFERENCE_URL=$(kubectl get inferenceservice california-housing-predictor \
+            -n ${NAMESPACE} \
+            -o jsonpath='{.status.url}')
+          
+          echo "Testing model at: $INFERENCE_URL"
+          
+          # Send test request
+          curl -X POST "$INFERENCE_URL/v1/models/california-housing:predict" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "instances": [
+                {
+                  "MedInc": 8.3252,
+                  "HouseAge": 41.0,
+                  "AveRooms": 6.98,
+                  "AveBedrms": 1.02,
+                  "Population": 322.0,
+                  "AveOccup": 2.55,
+                  "Latitude": 37.88,
+                  "Longitude": -122.23
+                }
+              ]
+            }'
+
+      - name: Update traffic split (gradual rollout)
+        env:
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+        run: |
+          echo "✅ Deployment successful!"
+          echo "Canary deployment is live with 10% traffic"
+          echo ""
+          echo "Next steps for gradual rollout:"
+          echo "  1. Monitor metrics in Grafana for 30 minutes"
+          echo "  2. If stable, increase to 50%: kubectl patch inferenceservice ..."
+          echo "  3. If stable, increase to 100%: kubectl patch inferenceservice ..."
+
+      - name: Send Slack notification
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR="good"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+          fi
+          
+          curl -X POST $SLACK_WEBHOOK_URL \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "attachments": [{
+                "color": "'$COLOR'",
+                "title": "Model Deployment '$STATUS'",
+                "fields": [
+                  {
+                    "title": "Repository",
+                    "value": "'"${{ github.repository }}"'",
+                    "short": true
+                  },
+                  {
+                    "title": "Branch",
+                    "value": "'"${{ github.ref_name }}"'",
+                    "short": true
+                  },
+                  {
+                    "title": "Image Tag",
+                    "value": "'"$IMAGE_TAG"'",
+                    "short": true
+                  },
+                  {
+                    "title": "Commit",
+                    "value": "<https://github.com/'"${{ github.repository }}"'/commit/'"${{ github.sha }}"'|'"${GITHUB_SHA:0:7}"'>",
+                    "short": true
+                  }
+                ],
+                "footer": "GitHub Actions",
+                "footer_icon": "https://github.githubassets.com/favicon.ico",
+                "ts": '"$(date +%s)"'
+              }]
+            }' || echo "Slack notification failed (webhook not configured)"
+
+      - name: Generate deployment summary
+        if: always()
+        env:
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag:** $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- Canary Traffic: 10%" >> $GITHUB_STEP_SUMMARY
+          echo "- Min Replicas: 1" >> $GITHUB_STEP_SUMMARY
+          echo "- Max Replicas: 3" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Monitoring" >> $GITHUB_STEP_SUMMARY
+          echo "- [Grafana Dashboard](http://grafana.monitoring.svc.cluster.local:3000)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Prometheus](http://prometheus.monitoring.svc.cluster.local:9090)" >> $GITHUB_STEP_SUMMARY

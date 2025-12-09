@@ -4,11 +4,11 @@ metadata:
   name: model-metrics-monitor
   namespace: monitoring
   labels:
-    app: model-metrics-exporter
+    app: metrics-exporter
 spec:
   selector:
     matchLabels:
-      app: model-metrics-exporter
+      app: metrics-exporter
   endpoints:
     - port: metrics
       interval: 15s
@@ -16,13 +16,4 @@ spec:
   namespaceSelector:
     matchNames:
       - monitoring
-      - kubeflow-user01
-      - kubeflow-user02
-      - kubeflow-user03
-      - kubeflow-user04
-      - kubeflow-user05
-      - kubeflow-user06
-      - kubeflow-user07
-      - kubeflow-user08
-      - kubeflow-user09
-      - kubeflow-user10
+
