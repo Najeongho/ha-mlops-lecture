@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lab 2-4 Part 1: ONNX Conversion
+Lab 3-3 Part 1: ONNX Conversion
 Scikit-learn 모델을 ONNX 포맷으로 변환합니다.
 
 실행 방법:
@@ -83,7 +83,7 @@ def clean_onnx_opset(model):
 
 
 def main():
-    print_header("Lab 2-4 Part 1: ONNX Conversion")
+    print_header("Lab 3-3 Part 1: ONNX Conversion")
     
     # 출력 디렉토리 설정
     outputs_dir = PROJECT_ROOT / "outputs"

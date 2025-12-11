@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lab 2-4 Part 2: Quantization (양자화)
+Lab 3-3 Part 2: Quantization (양자화)
 ONNX 모델에 동적 양자화를 적용하여 모델 크기를 추가로 줄입니다.
 
 실행 방법:
@@ -89,7 +89,7 @@ def clean_onnx_opset(model_path: str, output_path: str) -> bool:
 
 
 def main():
-    print_header("Lab 2-4 Part 2: Quantization")
+    print_header("Lab 3-3 Part 2: Quantization")
     
     # 경로 설정 (outputs 폴더 사용)
     outputs_dir = PROJECT_ROOT / "outputs"

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Lab 2-4 Part 3: Benchmark (성능 벤치마크)
+Lab 3-3 Part 3: Benchmark (성능 벤치마크)
 원본, ONNX, 양자화 모델의 추론 성능을 비교합니다.
 
 실행 방법:
@@ -13,7 +13,7 @@ Lab 2-4 Part 3: Benchmark (성능 벤치마크)
     - outputs/model_quantized.onnx
 
 환경변수 (선택):
-    - MLFLOW_TRACKING_URI: MLflow 서버 주소 (예: http://mlflow-server:5000)
+    - MLFLOW_TRACKING_URI: MLflow 서버 주소 (예: http://mlflow-server-service.mlflow-system.svc.cluster.local:5000)
 """
 
 import os
@@ -99,13 +99,13 @@ def get_mlflow_tracking_uri():
         return tracking_uri
     
     # Kubeflow/Kubernetes 환경에서 일반적인 MLflow 서비스 주소
-    default_uri = "http://mlflow-server.mlflow.svc.cluster.local:5000"
+    default_uri = "http://mlflow-server-service.mlflow-system.svc.cluster.local:5000"
     
     return default_uri
 
 
 def main():
-    print_header("Lab 2-4 Part 3: Benchmark")
+    print_header("Lab 3-3 Part 3: Benchmark")
     
     # 경로 설정 (outputs 폴더 사용)
     outputs_dir = PROJECT_ROOT / "outputs"
@@ -259,8 +259,8 @@ def main():
             print(f"  🔗 MLflow Tracking URI: {tracking_uri}")
             mlflow.set_tracking_uri(tracking_uri)
             
-            # 실험 설정
-            experiment_name = "lab2-4-model-optimization"
+            # 실험 설정 (Lab 3-3으로 변경)
+            experiment_name = "lab3-3-model-optimization"
             
             # 실험이 없으면 생성
             experiment = mlflow.get_experiment_by_name(experiment_name)
@@ -310,7 +310,7 @@ def main():
             print(f"  ⚠️ MLflow 기록 실패: {e}")
             print("     (MLflow 서버 연결을 확인하세요)")
             print("\n  💡 해결 방법:")
-            print("     1. 환경변수 설정: export MLFLOW_TRACKING_URI=http://<mlflow-server>:5000")
+            print("     1. 환경변수 설정: export MLFLOW_TRACKING_URI=http://mlflow-server-service.mlflow-system.svc.cluster.local:5000")
             print("     2. 또는 Kubeflow Jupyter 환경에서 실행하세요")
     else:
         print("  ⚠️ MLflow가 설치되지 않아 기록을 건너뜁니다.")
@@ -339,7 +339,7 @@ def main():
     print(f"     • 정확도 유지: {quant_accuracy*100:.2f}% (손실 없음)")
     
     print("\n" + "=" * 60)
-    print("  ✅ Lab 2-4 완료! 모델 최적화 실습을 성공적으로 마쳤습니다.")
+    print("  ✅ Lab 3-3 완료! 모델 최적화 실습을 성공적으로 마쳤습니다.")
     print("=" * 60 + "\n")
 
 
