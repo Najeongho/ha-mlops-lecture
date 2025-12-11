@@ -287,6 +287,6 @@ curl -X POST http://localhost:8000/predict \
 
 ---
 
-© 2025 현대오토에버 MLOps Training  
+© 2024 현대오토에버 MLOps Training  
 **Version**: 12.0 (KServe Timeout 해결 - End-to-End Complete!)  
 **Status**: ✅ Production Ready - **사용자 검증 완료!**

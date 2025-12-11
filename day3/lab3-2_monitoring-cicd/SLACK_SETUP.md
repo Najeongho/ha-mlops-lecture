@@ -426,7 +426,7 @@ Description:
 Model MAE (0.45) exceeded threshold 0.40 for 5 minutes
 Performance has degraded significantly and requires immediate attention.
 
-Time: 2025-12-09 14:35:22
+Time: 2024-12-09 14:35:22
 Status: firing
 
 [View in Grafana] [Silence Alert]
@@ -444,7 +444,7 @@ The model performance has returned to normal levels.
 Current MAE: 0.38 (threshold: 0.40)
 
 Duration: 15 minutes
-Resolved at: 2025-12-09 14:50:33
+Resolved at: 2024-12-09 14:50:33
 ```
 
 ---
@@ -499,4 +499,4 @@ annotations:
 
 ---
 
-© 2025 현대오토에버 MLOps Training - Slack 알림 설정 가이드
+© 2024 현대오토에버 MLOps Training - Slack 알림 설정 가이드
