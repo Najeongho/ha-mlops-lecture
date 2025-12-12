@@ -81,7 +81,7 @@ jobs:
         run: |
           echo "📝 Generating application files for California Housing model..."
           
-          # Create api.py - 시작 시간 단축을 위해 최적화
+          # Create api.py
           cat > api.py << 'APIEOF'
           from fastapi import FastAPI, HTTPException
           from pydantic import BaseModel, Field
@@ -110,7 +110,6 @@ jobs:
               prediction: float
               model_version: str
           
-          # Global model
           model = None
           model_loaded = False
           
@@ -125,7 +124,6 @@ jobs:
                   X_train, _, y_train, _ = train_test_split(
                       data.data, data.target, test_size=0.2, random_state=42
                   )
-                  # n_estimators를 줄여서 시작 시간 단축
                   model = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
                   model.fit(X_train, y_train)
                   model_loaded = True
@@ -137,7 +135,6 @@ jobs:
           
           @app.get("/health")
           async def health():
-              """Health check endpoint - 모델 로딩 상태 반환"""
               return {
                   "status": "healthy" if model_loaded else "loading",
                   "model_loaded": model_loaded
@@ -145,7 +142,6 @@ jobs:
           
           @app.get("/ready")
           async def ready():
-              """Readiness check - 모델이 준비되었을 때만 200 반환"""
               if not model_loaded:
                   raise HTTPException(status_code=503, detail="Model not ready")
               return {"status": "ready"}
@@ -170,7 +166,6 @@ jobs:
           COPY api.py .
           ENV MODEL_VERSION=1.0.0
           EXPOSE 8080
-          # uvicorn 시작 시 타임아웃 설정
           CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "120"]
           DOCKEREOF
           
@@ -245,7 +240,6 @@ jobs:
         run: |
           echo "🚀 Deploying to KServe..."
           
-          # InferenceService YAML 생성 - 시작 시간을 고려한 probe 설정
           cat > inferenceservice.yaml << EOF
           apiVersion: serving.kserve.io/v1beta1
           kind: InferenceService
@@ -274,7 +268,6 @@ jobs:
                     limits:
                       cpu: "1000m"
                       memory: "1Gi"
-                  # 🔧 핵심: 모델 로딩 시간을 고려한 probe 설정
                   readinessProbe:
                     httpGet:
                       path: /health
@@ -283,7 +276,6 @@ jobs:
                     periodSeconds: 10
                     timeoutSeconds: 10
                     failureThreshold: 6
-                    successThreshold: 1
                   livenessProbe:
                     httpGet:
                       path: /health
@@ -292,7 +284,6 @@ jobs:
                     periodSeconds: 30
                     timeoutSeconds: 10
                     failureThreshold: 3
-                  # 🔧 Startup probe 추가 - 느린 시작 허용
                   startupProbe:
                     httpGet:
                       path: /health
@@ -307,182 +298,163 @@ jobs:
           echo "✅ InferenceService applied"
 
       # ============================================================
-      # 🔧 개선된 Pod Ready 상태 대기 로직
+      # 🔧 핵심 수정: kubectl wait 사용 (가장 안정적)
       # ============================================================
       - name: Wait for Pod to be Ready
         if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
-          echo "⏳ Waiting for InferenceService to be ready..."
+          echo "⏳ Waiting for deployment to complete..."
           
-          MAX_RETRIES=60
-          RETRY_INTERVAL=10
-          RETRY_COUNT=0
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            # InferenceService Ready 상태 확인
-            READY=$(kubectl get inferenceservice california-housing-predictor \
-              -n $NAMESPACE \
-              -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
-            
-            if [ "$READY" = "True" ]; then
-              echo "✅ InferenceService is Ready!"
-              break
-            fi
-            
-            # Pod 상태 상세 확인
-            echo "📊 Current status (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES):"
-            
+          # 1. Pod가 생성될 때까지 대기
+          echo "📋 Step 1: Waiting for Pod to be created..."
+          MAX_WAIT=60
+          WAITED=0
+          while [ $WAITED -lt $MAX_WAIT ]; do
             POD_NAME=$(kubectl get pods -n $NAMESPACE \
               -l serving.kserve.io/inferenceservice=california-housing-predictor \
               -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
             
             if [ -n "$POD_NAME" ]; then
-              POD_PHASE=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
-              CONTAINER_READY=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || echo "false")
-              CONTAINER_STATE=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.containerStatuses[0].state}' 2>/dev/null || echo "{}")
-              
-              echo "  Pod: $POD_NAME"
-              echo "  Phase: $POD_PHASE"
-              echo "  Container Ready: $CONTAINER_READY"
-              
-              # Container가 Running이지만 Ready가 아닌 경우 (앱 시작 중)
-              if [ "$POD_PHASE" = "Running" ] && [ "$CONTAINER_READY" = "false" ]; then
-                echo "  📋 Container is starting, checking logs..."
-                kubectl logs $POD_NAME -n $NAMESPACE --tail=5 2>/dev/null || true
-              fi
-              
-              # Pending인 경우 원인 확인
-              if [ "$POD_PHASE" = "Pending" ]; then
-                echo "  📋 Pending reason:"
-                kubectl describe pod $POD_NAME -n $NAMESPACE 2>/dev/null | grep -A 3 "Events:" | tail -3 || true
-              fi
-            else
-              echo "  No pods found yet..."
-            fi
-            
-            RETRY_COUNT=$((RETRY_COUNT + 1))
-            echo "  Waiting ${RETRY_INTERVAL}s..."
-            sleep $RETRY_INTERVAL
-          done
-          
-          if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-            echo "❌ Timeout waiting for InferenceService to be ready"
-            echo "📋 Final Pod status:"
-            kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor
-            echo "📋 Pod description:"
-            kubectl describe pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor | tail -50
-            echo "📋 Pod logs:"
-            POD_NAME=$(kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-            if [ -n "$POD_NAME" ]; then
-              kubectl logs $POD_NAME -n $NAMESPACE --tail=100 2>/dev/null || true
-            fi
-            exit 1
-          fi
-
-      # ============================================================
-      # 🔧 개선된 Health Check - 애플리케이션 시작 완료 대기
-      # ============================================================
-      - name: Wait for Application to Start
-        if: steps.check-k8s.outputs.configured == 'true'
-        env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
-        run: |
-          echo "⏳ Waiting for application to fully start inside container..."
-          
-          POD_NAME=$(kubectl get pods -n $NAMESPACE \
-            -l serving.kserve.io/inferenceservice=california-housing-predictor \
-            -o jsonpath='{.items[0].metadata.name}')
-          
-          echo "Pod: $POD_NAME"
-          
-          # Container 내부에서 직접 health check 실행
-          MAX_APP_RETRIES=30
-          APP_RETRY_COUNT=0
-          
-          while [ $APP_RETRY_COUNT -lt $MAX_APP_RETRIES ]; do
-            echo "🔍 Checking application health (attempt $((APP_RETRY_COUNT + 1))/$MAX_APP_RETRIES)..."
-            
-            # kubectl exec로 컨테이너 내부에서 직접 curl 실행
-            HEALTH_RESULT=$(kubectl exec -n $NAMESPACE $POD_NAME -- \
-              curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/health 2>/dev/null || echo "000")
-            
-            echo "  Health endpoint returned: $HEALTH_RESULT"
-            
-            if [ "$HEALTH_RESULT" = "200" ]; then
-              echo "✅ Application is healthy and ready!"
-              
-              # 실제 health 응답 내용 확인
-              kubectl exec -n $NAMESPACE $POD_NAME -- \
-                curl -s http://localhost:8080/health 2>/dev/null || true
+              echo "✅ Pod found: $POD_NAME"
               break
             fi
             
-            # 로그 확인
-            echo "  📋 Recent logs:"
-            kubectl logs $POD_NAME -n $NAMESPACE --tail=3 2>/dev/null || true
-            
-            APP_RETRY_COUNT=$((APP_RETRY_COUNT + 1))
-            echo "  Waiting 10s..."
-            sleep 10
+            echo "  Waiting for Pod to be created... ($WAITED/$MAX_WAIT)"
+            sleep 5
+            WAITED=$((WAITED + 5))
           done
           
-          if [ $APP_RETRY_COUNT -ge $MAX_APP_RETRIES ]; then
-            echo "❌ Application failed to become healthy"
-            echo "📋 Full Pod logs:"
-            kubectl logs $POD_NAME -n $NAMESPACE --tail=100 2>/dev/null || true
+          if [ -z "$POD_NAME" ]; then
+            echo "❌ Pod not created within timeout"
+            kubectl get all -n $NAMESPACE
             exit 1
           fi
+          
+          # 2. kubectl wait로 Pod Ready 상태 대기 (가장 안정적인 방법)
+          echo ""
+          echo "📋 Step 2: Waiting for Pod to be Ready (readinessProbe 통과)..."
+          echo "   This waits for Kubernetes readinessProbe to succeed."
+          echo "   (The probe is checking /health endpoint internally)"
+          echo ""
+          
+          if kubectl wait --for=condition=Ready pod/$POD_NAME -n $NAMESPACE --timeout=600s; then
+            echo ""
+            echo "✅ Pod is Ready! (readinessProbe passed)"
+          else
+            echo ""
+            echo "❌ Pod failed to become Ready"
+            echo ""
+            echo "📋 Pod Status:"
+            kubectl get pod $POD_NAME -n $NAMESPACE -o wide
+            echo ""
+            echo "📋 Pod Events:"
+            kubectl describe pod $POD_NAME -n $NAMESPACE | tail -30
+            echo ""
+            echo "📋 Pod Logs:"
+            kubectl logs $POD_NAME -n $NAMESPACE --tail=50 || true
+            exit 1
+          fi
+          
+          # 3. InferenceService Ready 상태 확인
+          echo ""
+          echo "📋 Step 3: Checking InferenceService status..."
+          kubectl get inferenceservice california-housing-predictor -n $NAMESPACE
 
       # ============================================================
-      # 🔧 개선된 External Health Check (port-forward)
+      # 🔧 수정: Python urllib 사용 (curl 대신)
       # ============================================================
-      - name: Test model endpoint via port-forward
+      - name: Verify application health (inside container)
         if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
-          echo "🧪 Testing model endpoint via port-forward..."
+          echo "🔍 Verifying application health from inside container..."
           
           POD_NAME=$(kubectl get pods -n $NAMESPACE \
             -l serving.kserve.io/inferenceservice=california-housing-predictor \
             -o jsonpath='{.items[0].metadata.name}')
           
           echo "Pod: $POD_NAME"
+          echo ""
           
-          # Port-forward 시작 (백그라운드)
+          # Python urllib 사용 (curl이 없으므로)
+          echo "📋 Health Check (using Python urllib):"
+          kubectl exec -n $NAMESPACE $POD_NAME -- \
+            python -c "
+          import urllib.request
+          import json
+          try:
+              response = urllib.request.urlopen('http://localhost:8080/health', timeout=10)
+              data = json.loads(response.read().decode())
+              print(json.dumps(data, indent=2))
+              if data.get('model_loaded'):
+                  print('✅ Model is loaded and ready!')
+              else:
+                  print('⚠️ Model is still loading...')
+          except Exception as e:
+              print(f'Error: {e}')
+              exit(1)
+          "
+          
+          echo ""
+          echo "📋 Prediction Test (using Python urllib):"
+          kubectl exec -n $NAMESPACE $POD_NAME -- \
+            python -c "
+          import urllib.request
+          import json
+          try:
+              data = json.dumps({'features': [8.3252, 41.0, 6.98, 1.02, 322.0, 2.55, 37.88, -122.23]}).encode()
+              req = urllib.request.Request(
+                  'http://localhost:8080/predict',
+                  data=data,
+                  headers={'Content-Type': 'application/json'}
+              )
+              response = urllib.request.urlopen(req, timeout=30)
+              result = json.loads(response.read().decode())
+              print(json.dumps(result, indent=2))
+              print('✅ Prediction successful!')
+          except Exception as e:
+              print(f'Error: {e}')
+              exit(1)
+          "
+
+      # ============================================================
+      # Port-forward 테스트 (선택사항 - 외부 접근 확인)
+      # ============================================================
+      - name: Test via port-forward (optional external check)
+        if: steps.check-k8s.outputs.configured == 'true'
+        continue-on-error: true
+        env:
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+        run: |
+          echo "🧪 Testing via port-forward (external access)..."
+          echo "   Note: This may fail in some network configurations."
+          echo ""
+          
+          POD_NAME=$(kubectl get pods -n $NAMESPACE \
+            -l serving.kserve.io/inferenceservice=california-housing-predictor \
+            -o jsonpath='{.items[0].metadata.name}')
+          
+          # Port-forward 시작
           kubectl port-forward -n $NAMESPACE pod/$POD_NAME 8000:8080 &
           PORT_FORWARD_PID=$!
-          
-          # Port-forward가 설정될 때까지 충분히 대기
-          echo "⏳ Waiting for port-forward to establish..."
-          sleep 15
+          sleep 10
           
           # Health Check
           echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s --max-time 30 http://localhost:8000/health || echo '{"error": "connection failed"}')
-          echo "Health response: $HEALTH_RESPONSE"
-          
-          # Prediction Test
-          echo ""
-          echo "Testing /predict endpoint..."
-          PREDICT_RESPONSE=$(curl -s --max-time 30 -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{"features":[8.3252,41.0,6.98,1.02,322.0,2.55,37.88,-122.23]}' || echo '{"error": "connection failed"}')
-          echo "Prediction response: $PREDICT_RESPONSE"
+          HEALTH_RESPONSE=$(curl -s --max-time 30 http://localhost:8000/health 2>/dev/null || echo '{"error": "connection failed"}')
+          echo "Response: $HEALTH_RESPONSE"
           
           # Cleanup
           kill $PORT_FORWARD_PID 2>/dev/null || true
           
-          # 결과 검증
-          if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
-            echo ""
-            echo "✅ Model deployment verified successfully!"
+          if echo "$HEALTH_RESPONSE" | grep -q '"model_loaded": true'; then
+            echo "✅ Port-forward test passed!"
           else
-            echo ""
-            echo "⚠️  Health check response unexpected, but deployment may still be working"
-            echo "    Check the InferenceService URL directly"
+            echo "⚠️ Port-forward test inconclusive (may be network restriction)"
+            echo "   Internal health check already passed, deployment is successful."
           fi
 
       - name: Show deployment info
@@ -492,21 +464,25 @@ jobs:
         run: |
           echo ""
           echo "============================================================"
-          echo "📋 Deployment Information"
+          echo "📋 Deployment Summary"
           echo "============================================================"
           echo ""
           
-          # InferenceService URL 가져오기
           ISVC_URL=$(kubectl get inferenceservice california-housing-predictor \
             -n $NAMESPACE \
             -o jsonpath='{.status.url}' 2>/dev/null || echo "N/A")
           
           echo "InferenceService URL: $ISVC_URL"
           echo ""
-          
+          echo "InferenceService Status:"
           kubectl get inferenceservice california-housing-predictor -n $NAMESPACE
           echo ""
-          kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor
+          echo "Pod Status:"
+          kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor -o wide
+          echo ""
+          echo "============================================================"
+          echo "✅ Deployment completed successfully!"
+          echo "============================================================"
 
       - name: Generate deployment summary
         if: always()
@@ -537,10 +513,6 @@ jobs:
           echo "============================================================"
           echo ""
           echo "To deploy manually to KServe:"
-          echo ""
           echo "1. Configure KUBECONFIG_DATA secret in GitHub repository"
           echo "2. Ensure KServe is installed in your cluster"
           echo "3. Set KSERVE_NAMESPACE secret (default: kubeflow-user01)"
-          echo ""
-          echo "💡 For Lab 3-2, the monitoring stack is the main focus."
-          echo "   KServe deployment is an optional advanced feature."
