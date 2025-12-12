@@ -117,7 +117,7 @@ kubectl get pods -n monitoring-system
 
 ```bash
 # Port-forward
-kubectl port-forward -n monitoring-system svc/grafana 3000:80
+kubectl port-forward -n monitoring svc/grafana 3000:3000
 
 # 브라우저: http://localhost:3000
 # ID: admin
@@ -129,7 +129,7 @@ kubectl port-forward -n monitoring-system svc/grafana 3000:80
 ### Step 1-3: Prometheus 메트릭 확인
 
 ```bash
-kubectl port-forward -n monitoring-system svc/prometheus-server 9090:80
+kubectl port-forward -n monitoring svc/prometheus 9090:9090
 
 # 브라우저: http://localhost:9090
 # Query: model_prediction_count
@@ -287,6 +287,6 @@ curl -X POST http://localhost:8000/predict \
 
 ---
 
-© 2024 현대오토에버 MLOps Training  
+© 2025 현대오토에버 MLOps Training  
 **Version**: 12.0 (KServe Timeout 해결 - End-to-End Complete!)  
 **Status**: ✅ Production Ready - **사용자 검증 완료!**
