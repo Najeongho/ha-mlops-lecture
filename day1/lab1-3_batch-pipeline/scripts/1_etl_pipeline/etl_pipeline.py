@@ -33,7 +33,7 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_DEFAULT_REGION', 'ap-northeast-2')
 
 # S3 버킷 이름 생성
-BUCKET_NAME = f"mlops-training-data-user{USER_NUM}"
+BUCKET_NAME = f"mlops-training-user{USER_NUM}"
 
 print(f"\n사용자: {USER_NUM}")
 print(f"버킷: {BUCKET_NAME}")

@@ -156,13 +156,13 @@ echo ""
 log_step "[5/6] Kubernetes 배포"
 
 log_info "Deployment 배포 중..."
-envsubst < deployment.yaml | kubectl apply -f - || {
+envsubst < manifests/deployment.yaml | kubectl apply -f - || {
     log_error "Deployment 배포 실패"
     exit 1
 }
 
 log_info "Service 배포 중..."
-envsubst < service.yaml | kubectl apply -f - || {
+envsubst < manifests/service.yaml | kubectl apply -f - || {
     log_error "Service 배포 실패"
     exit 1
 }
