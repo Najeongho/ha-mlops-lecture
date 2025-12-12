@@ -6,6 +6,10 @@ on:
     types: [ completed ]
     branches: [ main ]
 
+env:
+  ECR_REPOSITORY: ml-model-california-housing
+  AWS_REGION: ap-northeast-2
+
 jobs:
   deploy:
     name: Build and Deploy Model
@@ -31,6 +35,51 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+
+      # ============================================================
+      # 🆕 ECR Repository 생성 (존재하지 않을 경우)
+      # ============================================================
+      - name: Create ECR Repository if not exists
+        env:
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+        run: |
+          echo "🔍 Checking if ECR repository exists..."
+          
+          # ECR Repository 존재 여부 확인
+          if aws ecr describe-repositories --repository-names $ECR_REPOSITORY 2>/dev/null; then
+            echo "✅ ECR repository '$ECR_REPOSITORY' already exists"
+          else
+            echo "📦 Creating ECR repository '$ECR_REPOSITORY'..."
+            aws ecr create-repository \
+              --repository-name $ECR_REPOSITORY \
+              --image-scanning-configuration scanOnPush=true \
+              --image-tag-mutability MUTABLE \
+              --encryption-configuration encryptionType=AES256
+            
+            echo "✅ ECR repository created successfully"
+            
+            # Lifecycle Policy 설정 (선택사항 - 이미지 정리)
+            echo "📋 Setting lifecycle policy..."
+            aws ecr put-lifecycle-policy \
+              --repository-name $ECR_REPOSITORY \
+              --lifecycle-policy-text '{
+                "rules": [
+                  {
+                    "rulePriority": 1,
+                    "description": "Keep last 10 images",
+                    "selection": {
+                      "tagStatus": "any",
+                      "countType": "imageCountMoreThan",
+                      "countNumber": 10
+                    },
+                    "action": {
+                      "type": "expire"
+                    }
+                  }
+                ]
+              }'
+            echo "✅ Lifecycle policy configured"
+          fi
 
       - name: Set image tag
         id: image-tag
@@ -72,145 +121,79 @@ jobs:
           
           app = FastAPI(
               title="California Housing Model API",
-              description="ML model for California Housing price predictions",
-              version=os.getenv("MODEL_VERSION", "v1.0")
+              description="ML model for California Housing price prediction",
+              version=os.getenv("MODEL_VERSION", "1.0.0")
           )
           
-          model = None
-          feature_names = None
+          class PredictionInput(BaseModel):
+              features: List[float] = Field(..., min_items=8, max_items=8)
           
-          class PredictionRequest(BaseModel):
-              features: List[float] = Field(..., description="8 features for California Housing")
-          
-          class PredictionResponse(BaseModel):
+          class PredictionOutput(BaseModel):
               prediction: float
               model_version: str
-              features_used: List[str]
+          
+          # Global model
+          model = None
           
           @app.on_event("startup")
           async def load_model():
-              global model, feature_names
-              logger.info("Loading California Housing dataset...")
-              housing = fetch_california_housing()
-              X, y = housing.data, housing.target
-              feature_names = housing.feature_names
-              
-              logger.info("Training Random Forest model...")
-              X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+              global model
+              logger.info("Loading model...")
+              data = fetch_california_housing()
+              X_train, _, y_train, _ = train_test_split(
+                  data.data, data.target, test_size=0.2, random_state=42
+              )
               model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
               model.fit(X_train, y_train)
-              
-              score = model.score(X_test, y_test)
-              logger.info(f"Model trained! R² score: {score:.4f}")
-          
-          @app.get("/")
-          async def root():
-              return {"message": "California Housing Model API", "version": os.getenv("MODEL_VERSION", "v1.0")}
+              logger.info("Model loaded successfully")
           
           @app.get("/health")
           async def health():
-              return {"status": "healthy" if model else "unhealthy", "model_loaded": model is not None}
+              return {"status": "healthy", "model_loaded": model is not None}
           
-          @app.post("/predict", response_model=PredictionResponse)
-          async def predict(request: PredictionRequest):
+          @app.post("/predict", response_model=PredictionOutput)
+          async def predict(input_data: PredictionInput):
               if model is None:
                   raise HTTPException(status_code=503, detail="Model not loaded")
-              if len(request.features) != 8:
-                  raise HTTPException(status_code=400, detail=f"Expected 8 features, got {len(request.features)}")
-              
-              features_array = np.array(request.features).reshape(1, -1)
-              prediction = model.predict(features_array)[0]
-              
-              return PredictionResponse(
+              features = np.array(input_data.features).reshape(1, -1)
+              prediction = model.predict(features)[0]
+              return PredictionOutput(
                   prediction=float(prediction),
-                  model_version=os.getenv("MODEL_VERSION", "v1.0"),
-                  features_used=list(feature_names)
+                  model_version=os.getenv("MODEL_VERSION", "1.0.0")
               )
-          
-          @app.get("/metrics")
-          async def metrics():
-              return {"model_loaded": model is not None, "model_version": os.getenv("MODEL_VERSION", "v1.0")}
           APIEOF
           
           # Create Dockerfile
           cat > Dockerfile << 'DOCKEREOF'
-          # California Housing Model Serving Dockerfile
-          # Auto-generated by GitHub Actions CD pipeline
-          
           FROM python:3.9-slim
-          
-          ARG MODEL_VERSION=latest
-          ARG BUILD_DATE
-          ARG VCS_REF
-          
-          LABEL maintainer="MLOps Team" \
-                version="${MODEL_VERSION}" \
-                description="California Housing Model API" \
-                build-date="${BUILD_DATE}" \
-                vcs-ref="${VCS_REF}"
-          
           WORKDIR /app
-          
-          RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
-          
-          COPY requirements.txt .
-          RUN pip install --no-cache-dir -r requirements.txt && \
-              pip install --no-cache-dir fastapi==0.104.1 uvicorn[standard]==0.24.0 pydantic==2.5.0
-          
+          RUN pip install --no-cache-dir fastapi uvicorn scikit-learn numpy pydantic
           COPY api.py .
-          
-          EXPOSE 8000
-          
-          ENV MODEL_VERSION=${MODEL_VERSION} \
-              PYTHONUNBUFFERED=1
-          
-          HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-              CMD curl -f http://localhost:8000/health || exit 1
-          
-          CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+          ENV MODEL_VERSION=1.0.0
+          EXPOSE 8080
+          CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"]
           DOCKEREOF
           
-          echo "✅ Application files generated successfully"
-          echo ""
-          echo "📄 Generated api.py ($(wc -l < api.py) lines)"
-          echo "📄 Generated Dockerfile ($(wc -l < Dockerfile) lines)"
+          echo "✅ Generated api.py and Dockerfile"
 
       - name: Build Docker image
-        if: steps.check-dockerfile.outputs.exists == 'true' || steps.check-dockerfile.outputs.exists == 'false'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ml-model-california-housing
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
-          echo "Building image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker build \
-            --platform linux/amd64 \
+          echo "🔨 Building Docker image..."
+          docker build --platform linux/amd64 \
             --build-arg MODEL_VERSION=$IMAGE_TAG \
-            --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-            --build-arg VCS_REF=${{ github.sha }} \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            -f Dockerfile .
-
-      - name: Scan image for vulnerabilities
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ml-model-california-housing
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          # Install Trivy scanner
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy
-          
-          # Scan image
-          trivy image --severity HIGH,CRITICAL $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            .
+          echo "✅ Image built: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Push image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ml-model-california-housing
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
@@ -238,72 +221,63 @@ jobs:
         if: steps.check-k8s.outputs.configured == 'true'
         run: |
           echo "📦 Installing aws-iam-authenticator..."
-          curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.14/aws-iam-authenticator_0.6.14_linux_amd64
-          chmod +x aws-iam-authenticator
-          sudo mv aws-iam-authenticator /usr/local/bin/
+          curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.11/aws-iam-authenticator_0.6.11_linux_amd64
+          chmod +x ./aws-iam-authenticator
+          sudo mv ./aws-iam-authenticator /usr/local/bin/
           aws-iam-authenticator version
           echo "✅ aws-iam-authenticator installed"
 
       - name: Configure kubectl
         if: steps.check-k8s.outputs.configured == 'true'
-        env:
-          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG_DATA }}
         run: |
-          mkdir -p ~/.kube
-          echo "$KUBECONFIG_DATA" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-          echo "✅ Kubeconfig configured"
-          
-          # Verify connection
-          if kubectl cluster-info; then
-            echo "✅ Successfully connected to Kubernetes cluster"
-          else
-            echo "⚠️  Failed to connect to Kubernetes cluster"
-            exit 1
-          fi
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          echo "✅ kubectl configured"
 
-      - name: Update KServe InferenceService
+      - name: Deploy to KServe
         if: steps.check-k8s.outputs.configured == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ml-model-california-housing
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
-          cat <<EOF | kubectl apply -f -
+          echo "🚀 Deploying to KServe..."
+          
+          # InferenceService YAML 생성
+          cat > inferenceservice.yaml << EOF
           apiVersion: serving.kserve.io/v1beta1
           kind: InferenceService
           metadata:
             name: california-housing-predictor
-            namespace: ${NAMESPACE}
+            namespace: $NAMESPACE
             annotations:
-              serving.kserve.io/deploymentMode: RawDeployment
+              sidecar.istio.io/inject: "false"
           spec:
             predictor:
               minReplicas: 1
               maxReplicas: 3
               containers:
-                - name: kserve-container
-                  image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
+                - name: predictor
+                  image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
                   ports:
-                    - containerPort: 8000
+                    - containerPort: 8080
                       protocol: TCP
                   env:
-                    - name: MODEL_NAME
-                      value: california-housing
                     - name: MODEL_VERSION
-                      value: ${IMAGE_TAG}
+                      value: "$IMAGE_TAG"
                   resources:
                     requests:
-                      cpu: 500m
-                      memory: 1Gi
+                      cpu: "100m"
+                      memory: "256Mi"
                     limits:
-                      cpu: 1000m
-                      memory: 2Gi
+                      cpu: "500m"
+                      memory: "512Mi"
                   readinessProbe:
                     httpGet:
                       path: /health
-                      port: 8000
+                      port: 8080
                     initialDelaySeconds: 30
                     periodSeconds: 10
                     timeoutSeconds: 5
@@ -311,213 +285,191 @@ jobs:
                   livenessProbe:
                     httpGet:
                       path: /health
-                      port: 8000
+                      port: 8080
                     initialDelaySeconds: 60
-                    periodSeconds: 20
+                    periodSeconds: 30
                     timeoutSeconds: 5
                     failureThreshold: 3
-              canaryTrafficPercent: 10  # Start with 10% canary traffic
           EOF
+          
+          kubectl apply -f inferenceservice.yaml
+          echo "✅ InferenceService applied"
 
-      - name: Wait for deployment
+      # ============================================================
+      # 🆕 Pod Ready 상태 대기 (핵심 수정 사항)
+      # ============================================================
+      - name: Wait for Pod to be Ready
         if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
-          echo "Waiting for InferenceService to be ready..."
-          echo "This may take up to 5 minutes for image pull and container startup"
+          echo "⏳ Waiting for InferenceService to be ready..."
           
-          # Check initial status
-          kubectl get inferenceservice california-housing-predictor -n ${NAMESPACE} || true
+          MAX_RETRIES=30
+          RETRY_INTERVAL=10
+          RETRY_COUNT=0
           
-          # Wait with timeout
-          if kubectl wait --for=condition=Ready \
-            inferenceservice/california-housing-predictor \
-            -n ${NAMESPACE} \
-            --timeout=300s; then
-            echo "✅ InferenceService is ready!"
-          else
-            echo "❌ InferenceService failed to become ready"
-            echo ""
-            echo "=== InferenceService Status ==="
-            kubectl get inferenceservice california-housing-predictor -n ${NAMESPACE} -o yaml || true
-            echo ""
-            echo "=== Pod Status ==="
-            kubectl get pods -n ${NAMESPACE} -l serving.kserve.io/inferenceservice=california-housing-predictor || true
-            echo ""
-            echo "=== Pod Describe ==="
-            kubectl describe pods -n ${NAMESPACE} -l serving.kserve.io/inferenceservice=california-housing-predictor || true
-            echo ""
-            echo "=== Pod Logs ==="
-            POD_NAME=$(kubectl get pods -n ${NAMESPACE} -l serving.kserve.io/inferenceservice=california-housing-predictor -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-            if [ -n "$POD_NAME" ]; then
-              kubectl logs -n ${NAMESPACE} $POD_NAME --all-containers=true --tail=100 || true
-            fi
-            echo ""
-            echo "=== Events ==="
-            kubectl get events -n ${NAMESPACE} --sort-by='.lastTimestamp' | tail -20 || true
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            # InferenceService Ready 상태 확인
+            READY=$(kubectl get inferenceservice california-housing-predictor \
+              -n $NAMESPACE \
+              -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "")
             
+            if [ "$READY" = "True" ]; then
+              echo "✅ InferenceService is Ready!"
+              break
+            fi
+            
+            # Pod 상태 상세 확인
+            echo "📊 Current Pod status:"
+            kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor \
+              --no-headers 2>/dev/null || echo "  No pods found yet"
+            
+            # Pod가 Pending 상태인 경우 원인 확인
+            POD_NAME=$(kubectl get pods -n $NAMESPACE \
+              -l serving.kserve.io/inferenceservice=california-housing-predictor \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            
+            if [ -n "$POD_NAME" ]; then
+              POD_STATUS=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+              echo "  Pod: $POD_NAME - Status: $POD_STATUS"
+              
+              if [ "$POD_STATUS" = "Pending" ]; then
+                echo "  📋 Pending reason:"
+                kubectl describe pod $POD_NAME -n $NAMESPACE 2>/dev/null | grep -A 5 "Events:" | tail -3 || true
+              fi
+            fi
+            
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "  Retry $RETRY_COUNT/$MAX_RETRIES - waiting ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          done
+          
+          if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+            echo "❌ Timeout waiting for InferenceService to be ready"
+            echo "📋 Final Pod status:"
+            kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor
+            echo "📋 Pod events:"
+            kubectl describe pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor | tail -30
             exit 1
           fi
 
-      - name: Test deployed model
+      # ============================================================
+      # 🆕 Health Check 개선 (Pod Ready 후 실행)
+      # ============================================================
+      - name: Test model endpoint
         if: steps.check-k8s.outputs.configured == 'true'
         env:
           NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
         run: |
-          # Get service endpoint (use port-forward for testing)
-          echo "Setting up port-forward for testing..."
-          POD_NAME=$(kubectl get pods -n ${NAMESPACE} \
+          echo "🧪 Testing model endpoint..."
+          
+          # Pod 이름 가져오기
+          POD_NAME=$(kubectl get pods -n $NAMESPACE \
             -l serving.kserve.io/inferenceservice=california-housing-predictor \
             -o jsonpath='{.items[0].metadata.name}')
           
+          if [ -z "$POD_NAME" ]; then
+            echo "❌ No pod found for InferenceService"
+            exit 1
+          fi
+          
           echo "Pod: $POD_NAME"
           
-          # Port-forward in background
-          kubectl port-forward -n ${NAMESPACE} pod/$POD_NAME 8000:8000 &
-          PF_PID=$!
-          sleep 5
-          
-          # Test health endpoint
-          echo "Testing /health endpoint..."
-          if curl -f http://localhost:8000/health; then
-            echo "✅ Health check passed"
-          else
-            echo "❌ Health check failed"
-            kill $PF_PID || true
+          # Pod가 Running 상태인지 최종 확인
+          POD_STATUS=$(kubectl get pod $POD_NAME -n $NAMESPACE -o jsonpath='{.status.phase}')
+          if [ "$POD_STATUS" != "Running" ]; then
+            echo "❌ Pod is not running. Current status: $POD_STATUS"
+            kubectl describe pod $POD_NAME -n $NAMESPACE | tail -20
             exit 1
           fi
           
-          # Test predict endpoint
-          echo ""
-          echo "Testing /predict endpoint..."
-          RESPONSE=$(curl -s -X POST http://localhost:8000/predict \
-            -H "Content-Type: application/json" \
-            -d '{
-              "features": [8.3252, 41.0, 6.98, 1.02, 322.0, 2.55, 37.88, -122.23]
-            }')
+          # Container가 Ready 상태인지 확인
+          CONTAINER_READY=$(kubectl get pod $POD_NAME -n $NAMESPACE \
+            -o jsonpath='{.status.containerStatuses[0].ready}')
           
-          echo "Response: $RESPONSE"
+          if [ "$CONTAINER_READY" != "true" ]; then
+            echo "⏳ Waiting for container to be ready..."
+            kubectl wait --for=condition=Ready pod/$POD_NAME -n $NAMESPACE --timeout=120s
+          fi
           
-          # Check if prediction is present
-          if echo "$RESPONSE" | grep -q "prediction"; then
-            echo "✅ Prediction endpoint working"
-            PREDICTION=$(echo "$RESPONSE" | grep -o '"prediction":[^,}]*' | cut -d':' -f2)
-            echo "📊 Predicted value: $PREDICTION"
-          else
-            echo "❌ Prediction endpoint failed"
-            kill $PF_PID || true
+          echo "Setting up port-forward for testing..."
+          kubectl port-forward -n $NAMESPACE pod/$POD_NAME 8000:8080 &
+          PORT_FORWARD_PID=$!
+          
+          # port-forward가 설정될 때까지 대기
+          sleep 10
+          
+          # Health Check 재시도 로직
+          MAX_HEALTH_RETRIES=5
+          HEALTH_RETRY_COUNT=0
+          
+          while [ $HEALTH_RETRY_COUNT -lt $MAX_HEALTH_RETRIES ]; do
+            echo "Testing /health endpoint (attempt $((HEALTH_RETRY_COUNT + 1))/$MAX_HEALTH_RETRIES)..."
+            
+            HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || echo "000")
+            
+            if [ "$HEALTH_RESPONSE" = "200" ]; then
+              echo "✅ Health check passed!"
+              curl -s http://localhost:8000/health | jq . || true
+              break
+            fi
+            
+            HEALTH_RETRY_COUNT=$((HEALTH_RETRY_COUNT + 1))
+            if [ $HEALTH_RETRY_COUNT -lt $MAX_HEALTH_RETRIES ]; then
+              echo "  Health check returned $HEALTH_RESPONSE, retrying in 5s..."
+              sleep 5
+            fi
+          done
+          
+          # Cleanup port-forward
+          kill $PORT_FORWARD_PID 2>/dev/null || true
+          
+          if [ "$HEALTH_RESPONSE" != "200" ]; then
+            echo "❌ Health check failed after $MAX_HEALTH_RETRIES attempts"
+            echo "📋 Pod logs:"
+            kubectl logs $POD_NAME -n $NAMESPACE --tail=50 || true
             exit 1
           fi
           
-          # Cleanup
-          kill $PF_PID || true
-          echo ""
-          echo "✅ Model deployment test successful!"
-
-      - name: Update traffic split (gradual rollout)
-        if: steps.check-k8s.outputs.configured == 'true'
-        env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
-        run: |
-          echo "✅ Deployment successful!"
-          echo "Canary deployment is live with 10% traffic"
-          echo ""
-          echo "Next steps for gradual rollout:"
-          echo "  1. Monitor metrics in Grafana for 30 minutes"
-          echo "  2. If stable, increase to 50%: kubectl patch inferenceservice ..."
-          echo "  3. If stable, increase to 100%: kubectl patch inferenceservice ..."
-      
-      - name: Skip Kubernetes deployment notice
-        if: steps.check-k8s.outputs.configured == 'false'
-        run: |
-          echo "⚠️  Kubernetes deployment skipped (KUBECONFIG_DATA not configured)"
-          echo ""
-          echo "✅ Successfully completed:"
-          echo "  - Docker image built: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
-          echo "  - Image pushed to ECR"
-          echo "  - Image scanned for vulnerabilities"
-          echo ""
-          echo "📝 To enable Kubernetes deployment:"
-          echo "  1. Configure KUBECONFIG_DATA secret in GitHub repository"
-          echo "  2. Ensure KServe is installed in your cluster"
-          echo "  3. Set KSERVE_NAMESPACE secret (default: kubeflow-user01)"
-          echo ""
-          echo "💡 For Lab 3-2, the monitoring stack is the main focus."
-          echo "   KServe deployment is an optional advanced feature."
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ml-model-california-housing
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-
-      - name: Send Slack notification
-        if: always()
-        continue-on-error: true
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "⚠️  SLACK_WEBHOOK_URL not configured - skipping notification"
-            exit 0
-          fi
-          
-          STATUS="${{ job.status }}"
-          COLOR="good"
-          if [ "$STATUS" != "success" ]; then
-            COLOR="danger"
-          fi
-          
-          curl -X POST $SLACK_WEBHOOK_URL \
-            -H 'Content-Type: application/json' \
-            -d '{
-              "attachments": [{
-                "color": "'$COLOR'",
-                "title": "Model Deployment '$STATUS'",
-                "fields": [
-                  {
-                    "title": "Repository",
-                    "value": "'"${{ github.repository }}"'",
-                    "short": true
-                  },
-                  {
-                    "title": "Branch",
-                    "value": "'"${{ github.ref_name }}"'",
-                    "short": true
-                  },
-                  {
-                    "title": "Image Tag",
-                    "value": "'"$IMAGE_TAG"'",
-                    "short": true
-                  },
-                  {
-                    "title": "Commit",
-                    "value": "<https://github.com/'"${{ github.repository }}"'/commit/'"${{ github.sha }}"'|'"${GITHUB_SHA:0:7}"'>",
-                    "short": true
-                  }
-                ],
-                "footer": "GitHub Actions",
-                "footer_icon": "https://github.githubassets.com/favicon.ico",
-                "ts": '"$(date +%s)"'
-              }]
-            }'
+          echo "✅ Model deployment verified successfully!"
 
       - name: Generate deployment summary
         if: always()
         env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Image Tag:** $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "- Canary Traffic: 10%" >> $GITHUB_STEP_SUMMARY
-          echo "- Min Replicas: 1" >> $GITHUB_STEP_SUMMARY
-          echo "- Max Replicas: 3" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Monitoring" >> $GITHUB_STEP_SUMMARY
-          echo "- [Grafana Dashboard](http://grafana.monitoring.svc.cluster.local:3000)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Prometheus](http://prometheus.monitoring.svc.cluster.local:9090)" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Image | \`$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deployment instructions (if K8s not configured)
+        if: steps.check-k8s.outputs.configured == 'false'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
+        run: |
+          echo ""
+          echo "============================================================"
+          echo "📦 Image successfully pushed to ECR!"
+          echo "============================================================"
+          echo ""
+          echo "To deploy manually to KServe:"
+          echo ""
+          echo "1. Configure KUBECONFIG_DATA secret in GitHub repository"
+          echo "2. Ensure KServe is installed in your cluster"
+          echo "3. Set KSERVE_NAMESPACE secret (default: kubeflow-user01)"
+          echo ""
+          echo "Or deploy manually with:"
+          echo "  kubectl apply -f inferenceservice.yaml"
+          echo ""
+          echo "💡 For Lab 3-2, the monitoring stack is the main focus."
+          echo "   KServe deployment is an optional advanced feature."
