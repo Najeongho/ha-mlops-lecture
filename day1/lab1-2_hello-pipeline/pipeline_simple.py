@@ -21,16 +21,6 @@ from kfp import compiler
 
 @dsl.component(base_image='python:3.11')
 def add(a: int, b: int) -> int:
-    """
-    두 숫자를 더합니다.
-    
-    Args:
-        a: 첫 번째 숫자
-        b: 두 번째 숫자
-    
-    Returns:
-        int: 두 숫자의 합
-    """
     result = a + b
     print(f"Add: {a} + {b} = {result}")
     return result
@@ -42,16 +32,6 @@ def add(a: int, b: int) -> int:
 
 @dsl.component(base_image='python:3.11')
 def multiply(x: int, factor: int = 2) -> int:
-    """
-    숫자에 factor를 곱합니다.
-    
-    Args:
-        x: 입력 숫자
-        factor: 곱할 값 (기본값: 2)
-    
-    Returns:
-        int: 곱셈 결과
-    """
     result = x * factor
     print(f"Multiply: {x} * {factor} = {result}")
     return result
@@ -63,12 +43,6 @@ def multiply(x: int, factor: int = 2) -> int:
 
 @dsl.component(base_image='python:3.11')
 def print_result(value: int):
-    """
-    최종 결과를 출력합니다.
-    
-    Args:
-        value: 출력할 값
-    """
     print("=" * 50)
     print(f"Final Result: {value}")
     print("=" * 50)
@@ -87,21 +61,6 @@ def hello_pipeline(
     b: int = 5,
     factor: int = 2
 ):
-    """
-    Hello World Pipeline
-    
-    이 파이프라인은 (a + b) * factor를 계산합니다.
-    
-    Args:
-        a: 첫 번째 숫자 (기본값: 3)
-        b: 두 번째 숫자 (기본값: 5)
-        factor: 곱할 값 (기본값: 2)
-    
-    실행 흐름:
-        1. add(a, b) → sum
-        2. multiply(sum, factor) → product
-        3. print_result(product)
-    """
     
     # Step 1: a + b 계산
     add_task = add(a=a, b=b)
