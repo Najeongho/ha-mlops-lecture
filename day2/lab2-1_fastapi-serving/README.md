@@ -65,8 +65,9 @@ source .venv/bin/activate  # Linux/Mac
 # .venv\Scripts\activate  # Windows
 
 # 2. 환경 변수 설정
-export ECR_REGISTRY="<YOUR_ECR_REGISTRY>"  # 예: 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
-export NAMESPACE="kubeflow-user01"         # 본인의 네임스페이스
+export ECR_REGISTRY="<YOUR_ECR_REGISTRY>"   # 예: 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com
+export NAMESPACE="<YOUR_NAMESPACE>"         # 본인의 네임스페이스
+export USER_NUM="<YOUR_USER_NUM>"           # 본인의 번호 (01 ~ 15)
 
 # 3. AWS CLI 로그인 확인
 aws sts get-caller-identity
@@ -235,7 +236,6 @@ curl -X POST http://localhost:8000/predict/batch \
 
 브라우저에서 접속:
 - Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
 
 ---
 
