@@ -17,20 +17,14 @@
 
 ## 🚀 실습 단계
 
-### Step 1: MLflow 배포
 
-```bash
-cd scripts
-./deploy_mlflow.sh
-```
-
-### Step 2: 실험 실행
+### Step 1: 실험 실행
 
 ```bash
 python mlflow_experiment.py
 ```
 
-### Step 3: MLflow UI 확인
+### Step 2: MLflow UI 확인
 
 ```bash
 kubectl port-forward svc/mlflow-server-service -n mlflow-system 5000:5000
@@ -39,7 +33,6 @@ kubectl port-forward svc/mlflow-server-service -n mlflow-system 5000:5000
 
 ## ✅ 완료 체크리스트
 
-- [ ] MLflow 서버 배포
 - [ ] 실험 실행
 - [ ] MLflow UI 접속
 - [ ] Model Registry 확인
