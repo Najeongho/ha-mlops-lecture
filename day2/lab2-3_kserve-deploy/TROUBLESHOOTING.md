@@ -365,8 +365,13 @@ kubectl rollout restart deployment mlflow-server -n mlflow-system
 
 ```bash
 #!/bin/bash
-NAMESPACE="kubeflow-user-example-com"  # 본인 namespace로 변경
+# USER_NUM 환경 변수 사용 (예: export USER_NUM="01")
+USER_NUM=${USER_NUM:-"01"}
+NAMESPACE="kubeflow-user${USER_NUM}"
 MODEL_NAME="california-model"
+
+echo "사용자: user${USER_NUM}"
+echo "네임스페이스: ${NAMESPACE}"
 
 echo "=========================================="
 echo "Lab 2-3 진단 스크립트"

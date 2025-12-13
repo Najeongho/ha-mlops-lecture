@@ -1,6 +1,16 @@
 # ============================================================
 # Lab 2-1: FastAPI 모델 서빙 - Kubernetes Deployment
 # ============================================================
+# 
+# 사용법:
+#   # 환경 변수 설정 후 envsubst로 적용
+#   export USER_NUM="01"
+#   export NAMESPACE="kubeflow-user${USER_NUM}"
+#   export ECR_REGISTRY="<YOUR_ECR_REGISTRY>"
+#   
+#   envsubst < deployment.yaml | kubectl apply -f -
+#
+# ============================================================
 
 apiVersion: apps/v1
 kind: Deployment
@@ -11,6 +21,7 @@ metadata:
     app: iris-api
     component: model-serving
     lab: lab2-1
+    user: user${USER_NUM}
 spec:
   replicas: 2
   selector:
@@ -21,10 +32,12 @@ spec:
       labels:
         app: iris-api
         component: model-serving
+        user: user${USER_NUM}
     spec:
       containers:
       - name: iris-api
-        image: ${ECR_REGISTRY}/mlops-training/iris-api:v1
+        # ⚠️ 사용자별 ECR 레포지토리 경로
+        image: ${ECR_REGISTRY}/mlops-training/user${USER_NUM}/iris-api:v1
         ports:
         - containerPort: 8000
           name: http
@@ -32,6 +45,8 @@ spec:
         env:
         - name: LOG_LEVEL
           value: "INFO"
+        - name: USER_NUM
+          value: "${USER_NUM}"
         resources:
           requests:
             memory: "256Mi"

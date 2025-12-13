@@ -2,6 +2,19 @@
 # ============================================================
 # Lab 2-3: KServe InferenceService 배포 스크립트
 # ============================================================
+#
+# 사용법:
+#   # 1. 환경 변수 설정
+#   export USER_NUM="01"  # 본인 번호로 변경
+#   source ../../scripts/setup-env.sh
+#
+#   # 2. Storage URI 설정
+#   export STORAGE_URI="s3://mlops-training-user${USER_NUM}/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model"
+#
+#   # 3. 스크립트 실행
+#   ./scripts/deploy_kserve.sh
+#
+# ============================================================
 set -e
 
 # 색상 정의
@@ -15,41 +28,76 @@ echo "============================================================"
 echo "  KServe InferenceService 배포"
 echo "============================================================"
 
+# ============================================================
+# 환경 변수 설정
+# ============================================================
+
+# USER_NUM 확인
+if [ -z "$USER_NUM" ]; then
+    USER_NUM="01"
+    echo -e "${YELLOW}⚠️  USER_NUM이 설정되지 않았습니다. 기본값 사용: ${USER_NUM}${NC}"
+fi
+
 # 네임스페이스 설정
 if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/namespace" ]; then
     NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
-elif [ -n "$USER_NAMESPACE" ]; then
-    NAMESPACE="$USER_NAMESPACE"
+elif [ -n "$NAMESPACE" ]; then
+    NAMESPACE="$NAMESPACE"
 else
-    NAMESPACE="kubeflow-user-example-com"
-    echo -e "${YELLOW}⚠️  네임스페이스를 확인하세요: $NAMESPACE${NC}"
+    NAMESPACE="kubeflow-user${USER_NUM}"
 fi
+
+# S3 버킷 설정 (사용자별)
+S3_BUCKET=${S3_BUCKET:-"mlops-training-user${USER_NUM}"}
 
 # 모델 설정
 MODEL_NAME=${MODEL_NAME:-"california-model"}
-S3_BUCKET=${S3_BUCKET:-"mlops-training-user01"}
 
-echo "📁 네임스페이스: $NAMESPACE"
-echo "🤖 모델명: $MODEL_NAME"
+echo ""
+echo "📋 설정 정보:"
+echo "   👤 사용자 번호: ${USER_NUM}"
+echo "   📁 네임스페이스: ${NAMESPACE}"
+echo "   🪣 S3 버킷: ${S3_BUCKET}"
+echo "   🤖 모델명: ${MODEL_NAME}"
 echo ""
 
+# ============================================================
 # Storage URI 확인
+# ============================================================
+
 if [ -z "$STORAGE_URI" ]; then
     echo -e "${YELLOW}⚠️  STORAGE_URI가 설정되지 않았습니다.${NC}"
     echo ""
     echo "S3에서 모델 경로를 확인하세요:"
-    echo "  aws s3 ls s3://$S3_BUCKET/mlflow-artifacts/ --recursive | grep MLmodel"
+    echo "  aws s3 ls s3://${S3_BUCKET}/mlflow-artifacts/ --recursive | grep MLmodel"
     echo ""
     echo "그 다음 환경변수를 설정하세요:"
-    echo "  export STORAGE_URI='s3://$S3_BUCKET/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model'"
+    echo "  export STORAGE_URI='s3://${S3_BUCKET}/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model'"
     echo ""
-    exit 1
+    
+    # S3에서 모델 경로 자동 탐색 시도
+    echo "🔍 S3에서 모델 경로 탐색 중..."
+    MODEL_PATH=$(aws s3 ls s3://${S3_BUCKET}/mlflow-artifacts/ --recursive 2>/dev/null | grep "MLmodel" | head -1 | awk '{print $4}')
+    
+    if [ -n "$MODEL_PATH" ]; then
+        # MLmodel 파일에서 model 디렉토리 경로 추출
+        MODEL_DIR=$(dirname "$MODEL_PATH")
+        STORAGE_URI="s3://${S3_BUCKET}/${MODEL_DIR}"
+        echo -e "${GREEN}✅ 모델 경로 발견: ${STORAGE_URI}${NC}"
+    else
+        echo -e "${RED}❌ S3에서 모델을 찾을 수 없습니다.${NC}"
+        echo "   먼저 MLflow로 모델을 학습하고 S3에 저장하세요."
+        exit 1
+    fi
 fi
 
-echo "📦 Storage URI: $STORAGE_URI"
+echo "📦 Storage URI: ${STORAGE_URI}"
 echo ""
 
+# ============================================================
 # 기존 InferenceService 삭제 (있으면)
+# ============================================================
+
 echo "🗑️  기존 InferenceService 확인 중..."
 if kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE &>/dev/null; then
     echo "  기존 InferenceService 삭제 중..."
@@ -57,7 +105,10 @@ if kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE &>/dev/null; then
     sleep 5
 fi
 
-# InferenceService YAML 생성 및 적용
+# ============================================================
+# InferenceService 생성
+# ============================================================
+
 echo ""
 echo "📝 InferenceService 생성 중..."
 
@@ -65,8 +116,10 @@ cat <<EOF | kubectl apply -f -
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
-  name: $MODEL_NAME
-  namespace: $NAMESPACE
+  name: ${MODEL_NAME}
+  namespace: ${NAMESPACE}
+  labels:
+    user: user${USER_NUM}
   annotations:
     # ⚠️ 중요: Istio sidecar 비활성화 (RBAC 403 에러 방지)
     sidecar.istio.io/inject: "false"
@@ -75,7 +128,7 @@ spec:
     model:
       modelFormat:
         name: sklearn
-      storageUri: "$STORAGE_URI"
+      storageUri: "${STORAGE_URI}"
       resources:
         requests:
           cpu: "500m"
@@ -88,7 +141,10 @@ EOF
 echo -e "${GREEN}✅ InferenceService 생성 완료${NC}"
 echo ""
 
+# ============================================================
 # 배포 대기
+# ============================================================
+
 echo "⏳ 배포 대기 중 (최대 5분)..."
 echo "   (보통 2-3분 소요)"
 echo ""
@@ -110,41 +166,50 @@ while true; do
     
     # 상태 확인
     READY=$(kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
-    REASON=$(kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "Pending")
     
     if [ "$READY" == "True" ]; then
-        echo ""
-        echo -e "${GREEN}✅ InferenceService Ready! (${ELAPSED}초 소요)${NC}"
         break
-    elif [ "$READY" == "False" ]; then
-        echo -e "${RED}❌ 배포 실패: $REASON${NC}"
-        echo ""
-        echo "로그 확인:"
-        kubectl logs -n $NAMESPACE -l serving.knative.dev/configuration=${MODEL_NAME}-predictor -c storage-initializer --tail=20 2>/dev/null || echo "로그 없음"
-        exit 1
-    else
-        printf "  ⏳ Status: %s | Reason: %s (%ds)\r" "$READY" "$REASON" "$ELAPSED"
     fi
     
-    sleep 10
+    # 진행 상황 출력
+    printf "\r   경과 시간: %ds / %ds (상태: %s)   " $ELAPSED $TIMEOUT "$READY"
+    sleep 5
 done
 
-# 최종 상태 출력
 echo ""
+echo ""
+
+# ============================================================
+# 배포 완료
+# ============================================================
+
 echo "============================================================"
-echo "  배포 완료"
+echo -e "${GREEN}  ✅ KServe InferenceService 배포 완료!${NC}"
 echo "============================================================"
 echo ""
+echo "📋 InferenceService 상태:"
 kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE
 echo ""
 
-# Pod 상태
-echo "📋 Pod 상태:"
-kubectl get pods -n $NAMESPACE -l serving.knative.dev/configuration=${MODEL_NAME}-predictor
+# URL 확인
+ISVC_URL=$(kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE -o jsonpath='{.status.url}' 2>/dev/null || echo "N/A")
+echo "🌐 Service URL: ${ISVC_URL}"
 echo ""
 
-# 내부 URL
-echo "🔗 클러스터 내부 URL:"
-echo "   http://${MODEL_NAME}-predictor.${NAMESPACE}.svc.cluster.local/v1/models/${MODEL_NAME}:predict"
+# ============================================================
+# 테스트 안내
+# ============================================================
+
+echo "============================================================"
+echo "  🚀 다음 단계: 모델 테스트"
+echo "============================================================"
 echo ""
-echo -e "${GREEN}✅ 배포 완료! test_inference.sh로 테스트하세요.${NC}"
+echo "1️⃣  포트 포워딩 (새 터미널에서):"
+echo "   kubectl port-forward -n ${NAMESPACE} svc/${MODEL_NAME}-predictor 8080:80"
+echo ""
+echo "2️⃣  예측 테스트:"
+echo '   curl -X POST http://localhost:8080/v1/models/'${MODEL_NAME}':predict \'
+echo '     -H "Content-Type: application/json" \'
+echo '     -d '\''{"instances": [[8.3252, 41.0, 6.984127, 1.023810, 322.0, 2.555556, 37.88, -122.23]]}'\'''
+echo ""
+echo "============================================================"

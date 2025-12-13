@@ -7,6 +7,7 @@ on:
     branches: [ dev ]
 
 env:
+  # 공용 ECR 레포지토리 (california-housing 모델은 공용)
   ECR_REPOSITORY: ml-model-california-housing
   AWS_REGION: ap-northeast-2
 
@@ -236,7 +237,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
           IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
           echo "🚀 Deploying to KServe..."
           
@@ -303,7 +304,7 @@ jobs:
       - name: Wait for Pod to be Ready
         if: steps.check-k8s.outputs.configured == 'true'
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
           echo "⏳ Waiting for deployment to complete..."
           
@@ -368,7 +369,7 @@ jobs:
       - name: Verify application health (inside container)
         if: steps.check-k8s.outputs.configured == 'true'
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
           echo "🔍 Verifying application health from inside container..."
           
@@ -427,7 +428,7 @@ jobs:
         if: steps.check-k8s.outputs.configured == 'true'
         continue-on-error: true
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
           echo "🧪 Testing via port-forward (external access)..."
           echo "   Note: This may fail in some network configurations."
@@ -460,7 +461,7 @@ jobs:
       - name: Show deployment info
         if: steps.check-k8s.outputs.configured == 'true'
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE || 'kubeflow-user01' }}
+          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
           echo ""
           echo "============================================================"

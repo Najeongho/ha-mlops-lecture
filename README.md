@@ -140,15 +140,17 @@ cd ha-mlops-pipeline
 ### 2. 환경 변수 설정
 
 ```bash
-# 본인의 수강생 번호로 변경 (01~30)
-export USER_NUM="01"
+# ⚠️ 본인의 사용자 번호로 변경하세요!
+export USER_NUM="01"  # 예: 01, 02, ..., 15, 20
 
-# 네임스페이스 설정
+# 자동 설정되는 환경 변수
 export NAMESPACE="kubeflow-user${USER_NUM}"
+export S3_BUCKET="mlops-training-user${USER_NUM}"
+export ECR_IRIS_API_REPO="mlops-training/user${USER_NUM}/iris-api"
 
 # 확인
-echo "사용자: user${USER_NUM}"
 echo "네임스페이스: ${NAMESPACE}"
+echo "S3 버킷: ${S3_BUCKET}"
 ```
 
 ### 3. AWS 자격 증명 설정
