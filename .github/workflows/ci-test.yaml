@@ -205,6 +205,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.SOURCE_PATH }}
+          load: true
           push: false
           tags: mlops-model:test
           cache-from: type=gha
