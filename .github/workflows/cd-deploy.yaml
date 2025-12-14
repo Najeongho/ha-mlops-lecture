@@ -132,7 +132,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "namespace=${{ github.event.inputs.user_namespace }}" >> $GITHUB_OUTPUT
           else
-            echo "namespace=kubeflow-user01" >> $GITHUB_OUTPUT
+            echo "namespace=kubeflow-user07" >> $GITHUB_OUTPUT
           fi
       
       - name: Deploy InferenceService

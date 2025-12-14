@@ -9,9 +9,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/**'
-      - 'tests/**'
-      - 'requirements.txt'
+      - 'day3/lab3-2_monitoring-cicd/src/**'
+      - 'day3/lab3-2_monitoring-cicd/tests/**'
+      - 'day3/lab3-2_monitoring-cicd/requirements.txt'
       - '.github/workflows/ci-test.yaml'
   pull_request:
     branches: [main]
@@ -44,19 +44,19 @@ jobs:
       
       - name: Run flake8 (syntax errors)
         run: |
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 day3/lab3-2_monitoring-cicd/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
       
       - name: Run flake8 (style check)
         run: |
-          flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          flake8 day3/lab3-2_monitoring-cicd/src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       
       - name: Check formatting with black
         run: |
-          black --check --diff src/ || echo "Formatting issues found"
+          black --check --diff day3/lab3-2_monitoring-cicd/src/ || echo "Formatting issues found"
       
       - name: Check imports with isort
         run: |
-          isort --check-only --diff src/ || echo "Import order issues found"
+          isort --check-only --diff day3/lab3-2_monitoring-cicd/src/ || echo "Import order issues found"
 
   # ============================================================
   # Job 2: 단위 테스트
@@ -84,7 +84,7 @@ jobs:
       
       - name: Run unit tests
         run: |
-          pytest tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
+          pytest day3/lab3-2_monitoring-cicd/tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
         env:
           PYTHONPATH: ${{ github.workspace }}
       
