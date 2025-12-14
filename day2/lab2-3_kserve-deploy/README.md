@@ -42,12 +42,12 @@ lab2-3_kserve-deploy/
 ### ⚠️ 반드시 확인해야 할 사항
 
 1. **네임스페이스 자동 감지 사용**
-   - Kubeflow Notebook에서는 `kubeflow-user-example-com`, `kubeflow-user01` 등 각자 다른 네임스페이스 사용
+   - Kubeflow Notebook에서는 `kubeflow-user01`, `kubeflow-user07` 등 각자 다른 네임스페이스 사용
    - 하드코딩 대신 자동 감지 함수 사용 권장
 
 2. **S3 전체 경로 사용**
    - ❌ `mlflow-artifacts:/RUN_ID/model` (KServe 미지원)
-   - ✅ `s3://BUCKET/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model`
+   - ✅ `s3://BUCKET/mlflow-artifacts/RUN_ID/artifacts/model`
 
 3. **Istio Sidecar 비활성화**
    - InferenceService에 `sidecar.istio.io/inject: "false"` 추가
@@ -85,7 +85,7 @@ def get_current_namespace():
         with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace', 'r') as f:
             return f.read().strip()
     except FileNotFoundError:
-        return "kubeflow-user-example-com"  # 기본값
+        return "kubeflow-user01"  # 기본값
 
 NAMESPACE = get_current_namespace()
 print(f"📁 현재 네임스페이스: {NAMESPACE}")
@@ -197,11 +197,11 @@ aws s3 ls s3://mlops-training-user01/mlflow-artifacts/ --recursive | grep "MLmod
 ```python
 import time
 
-MODEL_NAME = "california-model"
+MODEL_NAME = "california-model-user<USER_NUM>"
 
 # ⚠️ 중요: S3 전체 경로 사용!
 # MLflow UI에서 확인한 Experiment ID와 Run ID로 수정
-STORAGE_URI = "s3://mlops-training-user01/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model"
+STORAGE_URI = "s3://mlops-training-user01/mlflow-artifacts/RUN_ID/artifacts/model"
 
 isvc_spec = {
     "apiVersion": "serving.kserve.io/v1beta1",
@@ -421,3 +421,7 @@ kubectl describe inferenceservice california-model -n $NAMESPACE
 - [KServe 공식 문서](https://kserve.github.io/website/)
 - [MLflow Model Registry](https://mlflow.org/docs/latest/model-registry.html)
 - [California Housing 데이터셋](https://scikit-learn.org/stable/datasets/real_world.html#california-housing-dataset)
+
+---
+
+© 2025 현대오토에버 MLOps Training

@@ -55,7 +55,7 @@ fi
 
 # 환경 변수 설정
 NAMESPACE="kubeflow-user${USER_NUM}"
-PROFILE_NAME="profile-user${USER_NUM}"
+PROFILE_NAME="kubeflow-user${USER_NUM}"
 USER_EMAIL="user${USER_NUM}@mlops.local"
 S3_BUCKET="mlops-training-user${USER_NUM}"
 ECR_REPO_PREFIX="mlops-training/user${USER_NUM}"
@@ -432,7 +432,7 @@ cat <<EOF
   │                                                         │
   │  ☁️  AWS 리소스:                                        │
   │     ├─ S3 버킷: ${S3_BUCKET}                            
-  │     └─ ECR: ${ECR_REPO_PREFIX}/*                        
+  │     └─ ECR: ${ECR_REPO_PREFIX}                        
   │                                                         │
   │  🔗 MLflow 연결:                                        │
   │     └─ http://mlflow-server.mlflow-system:5000          │

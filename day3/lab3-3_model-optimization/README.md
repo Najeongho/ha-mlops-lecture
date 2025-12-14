@@ -23,7 +23,7 @@ ONNX 변환 & 양자화를 통한 모델 최적화
 lab3-3_model-optimization/
 ├── README.md                     # 이 파일
 ├── notebook/
-│   └── lab3-3_model_optimization.ipynb   # Jupyter Notebook 실습
+│   └── model_optimization.ipynb  # Jupyter Notebook 실습
 ├── scripts/
 │   ├── 1_onnx_conversion.py      # ONNX 변환 스크립트
 │   ├── 2_quantization.py         # 양자화 스크립트
@@ -40,7 +40,7 @@ Kubeflow 대시보드에서 Jupyter Notebook 서버 시작 후 터미널 열기
 ### 2. 실습 디렉토리 이동
 
 ```bash
-cd ~/ha-mlops-lecture/day3/lab3-3_model-optimization
+cd day3/lab3-3_model-optimization
 ```
 
 ### 3. 필요 패키지 설치 (필요 시)
@@ -175,3 +175,7 @@ UserWarning: X has feature names, but LogisticRegression was fitted without feat
 - [ONNX 공식 문서](https://onnx.ai/)
 - [ONNX Runtime 최적화 가이드](https://onnxruntime.ai/docs/performance/)
 - [MLflow Tracking 가이드](https://mlflow.org/docs/latest/tracking.html)
+
+---
+
+© 2025 현대오토에버 MLOps Training

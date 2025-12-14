@@ -49,7 +49,7 @@ lab1-3_batch-pipeline/
 │   └── 2_batch_processing/
 │       └── pandas_batch_job.py     # Part 2: Batch 처리 (45분)
 └── notebooks/
-    └── README_NOTEBOOK.md           # Jupyter Notebook 실습 가이드
+    └── batch_pipeline.ipynb        # Jupyter Notebook 실습 코드
 ```
 
 ---

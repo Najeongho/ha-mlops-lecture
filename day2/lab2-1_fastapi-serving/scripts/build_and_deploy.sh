@@ -6,7 +6,6 @@
 # 사용법:
 #   # 1. 환경 변수 설정
 #   export USER_NUM="01"  # 본인 번호로 변경
-#   source ../../scripts/setup-env.sh
 #
 #   # 2. 스크립트 실행
 #   ./scripts/build_and_deploy.sh
@@ -101,7 +100,7 @@ echo ""
 # ============================================================
 log_step "[1/6] Docker 이미지 빌드"
 
-IMAGE_NAME="iris-api"
+IMAGE_NAME="user$USER_NUM"
 IMAGE_TAG="v1"
 
 log_info "이미지 빌드 중..."
@@ -137,7 +136,7 @@ echo ""
 log_step "[3/6] 이미지 태깅"
 
 # 사용자별 ECR 레포지토리 경로 (변경됨!)
-ECR_REPO="mlops-training/user${USER_NUM}/${IMAGE_NAME}"
+ECR_REPO="mlops-training/${IMAGE_NAME}"
 FULL_IMAGE_NAME="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
 
 log_info "사용자별 ECR 레포지토리: ${ECR_REPO}"

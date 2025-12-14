@@ -49,7 +49,7 @@ export MLFLOW_ARTIFACT_PATH="s3://${S3_BUCKET}/mlflow-artifacts"
 export ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
 # 사용자별 ECR 레포지토리
-export ECR_IRIS_API_REPO="mlops-training/user${USER_NUM}/iris-api"
+export ECR_IRIS_API_REPO="mlops-training/user${USER_NUM}"
 
 # 공용 ECR 레포지토리 (california-housing 모델)
 export ECR_CALIFORNIA_HOUSING_REPO="ml-model-california-housing"
@@ -62,7 +62,6 @@ export ECR_CALIFORNIA_HOUSING_IMAGE="${ECR_REGISTRY}/${ECR_CALIFORNIA_HOUSING_RE
 # MLflow 설정
 # ============================================================
 export MLFLOW_TRACKING_URI="http://mlflow-server-service.mlflow-system.svc.cluster.local:5000"
-export MLFLOW_S3_ENDPOINT_URL="http://minio-service.kubeflow.svc:9000"
 
 # ============================================================
 # Kubeflow 설정

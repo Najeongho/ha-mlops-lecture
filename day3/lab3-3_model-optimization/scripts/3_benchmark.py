@@ -15,6 +15,7 @@ Lab 3-3: Benchmark & MLflow
 
 import os
 import time
+import boto3
 import pickle
 import numpy as np
 from sklearn.datasets import load_iris
@@ -23,6 +24,7 @@ from sklearn.metrics import accuracy_score
 
 import onnxruntime as ort
 import mlflow
+from mlflow import MlflowClient
 
 def measure_inference_time(predict_fn, X, n_iterations=1000):
     """추론 시간 측정 (밀리초 단위)"""
@@ -39,6 +41,23 @@ def measure_inference_time(predict_fn, X, n_iterations=1000):
     return ((end - start) / n_iterations) * 1000  # ms로 변환
 
 def main():
+
+    # ⚠️ 강사가 제공한 본인의 AWS 자격 증명으로 변경!
+    AWS_ACCESS_KEY_ID = "YOUR_AWS_ACCESS_KEY_ID"          # 수정 필요!
+    AWS_SECRET_ACCESS_KEY = "YOUR_AWS_SECRET_ACCESS_KEY"  # 수정 필요!
+    AWS_REGION = "ap-northeast-2"
+
+    # ⚠️ 본인의 사용자 번호로 변경!
+    USER_NUM = "YOUR_USER_NUM"
+    NAMESPACE = f"kubeflow-user{USER_NUM}"
+
+    # 환경 변수 설정
+    os.environ["AWS_ACCESS_KEY_ID"] = AWS_ACCESS_KEY_ID
+    os.environ["AWS_SECRET_ACCESS_KEY"] = AWS_SECRET_ACCESS_KEY
+    os.environ["AWS_DEFAULT_REGION"] = AWS_REGION
+
+    print(f"✅ 사용자 설정 완료:")
+
     print("=" * 60)
     print("Lab 3-3: Benchmark & MLflow 기록")
     print("=" * 60)
@@ -199,11 +218,77 @@ def main():
     )
     mlflow.set_tracking_uri(mlflow_uri)
     print(f"   MLflow URI: {mlflow_uri}")
-    
-    # 실험 설정
-    experiment_name = "lab3-3-model-optimization"
-    mlflow.set_experiment(experiment_name)
-    print(f"   실험 이름: {experiment_name}")
+
+
+    try:
+        s3_client = boto3.client('s3', region_name=AWS_REGION)
+
+        S3_BUCKET = f"mlops-training-user{USER_NUM}"
+
+        print(f"✅ USER_NUM: {USER_NUM}")
+        print(f"✅ NAMESPACE: {NAMESPACE}")
+        print(f"✅ AWS Region: {AWS_REGION}")
+        print(f"✅ S3 Bucket: {S3_BUCKET}")
+        
+        # S3 버킷 접근 테스트
+        s3_client.head_bucket(Bucket=S3_BUCKET)
+        
+        print("="*60)
+        print("  AWS Credentials 설정 완료!")
+        print("="*60)
+        print(f"✅ AWS Access Key: {AWS_ACCESS_KEY_ID[:4]}****")
+        print(f"✅ S3 접근 테스트: 성공!")
+        print("")
+        print("이제 3.2 실험을 실행할 수 있습니다!")
+        
+    except Exception as e:
+        print(f"❌ 오류: {e}")
+        print(f"")
+        print(f"해결 방법:")
+        print(f"1. AWS_ACCESS_KEY_ID와 AWS_SECRET_ACCESS_KEY를 정확히 입력하세요")
+        print(f"2. 강사가 제공한 자격 증명이 맞는지 확인하세요")
+        print(f"3. S3 버킷({S3_BUCKET})에 접근 권한이 있는지 확인하세요")
+
+    # MLflow 클라이언트 생성
+    client = MlflowClient()
+
+    # ✅ 사용자별 고유한 실험 이름 사용!
+    EXPERIMENT_NAME = f"lab3-3-model-optimization-user{USER_NUM}"
+
+    # 사용자별 S3 artifact location 설정
+    artifact_location = f"s3://{S3_BUCKET}/mlflow-artifacts"
+
+    # 실험이 이미 존재하는지 확인
+    experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
+
+    if experiment is None:
+        # 실험이 없으면 생성
+        experiment_id = client.create_experiment(
+            name=EXPERIMENT_NAME,
+            artifact_location=artifact_location
+        )
+        print(f"\n✅ 새 실험 생성: {EXPERIMENT_NAME}")
+        experiment = client.get_experiment(experiment_id)
+    else:
+        print(f"\n✅ 기존 실험 사용: {EXPERIMENT_NAME}")
+        experiment_id = experiment.experiment_id
+
+    # MLflow에 실험 설정
+    mlflow.set_experiment(EXPERIMENT_NAME)
+
+    # 결과 출력
+    experiment = client.get_experiment(experiment_id)
+    print(f"\n📋 실험 정보:")
+    print(f"   Name: {experiment.name}")
+    print(f"   ID: {experiment.experiment_id}")
+    print(f"   Artifact Location: {experiment.artifact_location}")
+    print(f"   Lifecycle Stage: {experiment.lifecycle_stage}")
+
+    # 검증
+    if S3_BUCKET in experiment.artifact_location and experiment.lifecycle_stage == "active":
+        print(f"\n🎉 SUCCESS: 실험이 올바르게 설정되었습니다!")
+    else:
+        print(f"\n❌ ERROR: 문제가 있습니다!")
     
     # MLflow Run 시작
     with mlflow.start_run(run_name="benchmark-results") as run:

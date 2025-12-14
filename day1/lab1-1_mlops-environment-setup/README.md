@@ -65,15 +65,12 @@ lab1-1_mlops-environment-setup/
 │
 ├── 1_kubeflow_setup/
 │   ├── verify_kubeflow.sh             # Part 1: Kubeflow 검증 스크립트
-│   └── README.md                      # Kubeflow 상세 가이드
 │
 ├── 2_mlflow_setup/
 │   ├── verify_mlflow.sh               # Part 2: MLflow 검증 스크립트
-│   └── README.md                      # MLflow 상세 가이드
 │
 └── 3_storage_setup/
     ├── verify_storage.sh              # Part 3: Storage 검증 스크립트
-    └── README.md                      # Storage 상세 가이드
 ```
 
 ---
@@ -101,7 +98,7 @@ lab1-1_mlops-environment-setup/
 │ profile-user13     │ user13@mlops.local             │ CPU 8, Memory 16Gi           │
 │ profile-user14     │ user14@mlops.local             │ CPU 8, Memory 16Gi           │
 │ profile-user15     │ user15@mlops.local             │ CPU 8, Memory 16Gi           │
-│ profile-user20     │ user20@mlops.local (강사)      │ CPU 16, Memory 32Gi ⭐       │
+│ profile-user20     │ user20@mlops.local (강사)       │ CPU 16, Memory 32Gi ⭐       │
 └────────────────────┴────────────────────────────────┴──────────────────────────────┘
 ```
 
@@ -220,8 +217,8 @@ CoreDNS is running at https://XXXXX.ap-northeast-2.eks.amazonaws.com/api/v1/name
 
 ```bash
 # GitHub 저장소 클론
-git clone https://github.com/Najeongho/ha-mlops-lecture.git
-cd ha-mlops-lecture
+git clone https://github.com/fastcampusdevmlops/ha-mlops-pipeline.git
+cd ha-mlops-pipeline
 
 # Lab 1-1 디렉토리로 이동
 cd day1/lab1-1_mlops-environment-setup
@@ -333,7 +330,7 @@ export USER_NUM="01"  # 본인 번호로 변경
 | 1 | Namespace | Kubeflow Namespace 존재 확인 |
 | 2 | Profile | Profile 및 Owner email 확인 |
 | 3 | S3 버킷 | `mlops-training-user{XX}` 버킷 확인 |
-| 4 | ECR 레지스트리 | `mlops-training/user{XX}/iris-api` 확인 |
+| 4 | ECR 레지스트리 | `mlops-training/user{XX}*` 확인 |
 | 5 | MLflow PodDefault | `access-mlflow` PodDefault 확인 |
 | 6 | MLflow Server | MLflow Tracking Server 상태 확인 |
 | 7 | 권한 격리 | Namespace 간 접근 차단 확인 |
@@ -355,7 +352,7 @@ kubectl get pods -n mlflow-system -l app=postgres
 
 ```bash
 # MLflow UI 포트 포워딩
-kubectl port-forward svc/mlflow-server -n mlflow-system 5000:5000
+kubectl port-forward svc/mlflow-server-service -n mlflow-system 5000:5000
 
 # 브라우저에서 접속
 # http://localhost:5000
@@ -374,7 +371,7 @@ kubectl get poddefault access-mlflow -n kubeflow-user${USER_NUM} -o yaml
 ```yaml
 env:
 - name: MLFLOW_TRACKING_URI
-  value: "http://mlflow-server.mlflow-system.svc.cluster.local:5000"
+  value: "http://mlflow-server-service.mlflow-system.svc.cluster.local:5000"
 - name: MLFLOW_S3_ENDPOINT_URL
   value: "https://s3.ap-northeast-2.amazonaws.com"
 - name: AWS_DEFAULT_REGION
@@ -424,7 +421,7 @@ export USER_NUM="01"  # 본인 번호로 변경
 | Step | 검증 항목 | 설명 |
 |------|----------|------|
 | 1 | S3 버킷 | `mlops-training-user{XX}` 버킷 존재 및 접근 확인 |
-| 2 | ECR 레지스트리 | `mlops-training/user{XX}/iris-api` 레지스트리 확인 |
+| 2 | ECR 레지스트리 | `mlops-training/user{XX}` 레지스트리 확인 |
 | 3 | MLflow Artifacts | S3 MLflow Artifacts 폴더 확인 |
 | 4 | Pipeline Artifacts | Kubeflow Pipeline Artifacts 폴더 확인 |
 | 5 | 아키텍처 | 전체 스토리지 아키텍처 요약 |
@@ -448,7 +445,7 @@ aws s3 ls s3://mlops-training-user${USER_NUM}/mlflow-artifacts/ --region ap-nort
 ```bash
 # ECR 레지스트리 확인
 aws ecr describe-repositories \
-    --repository-names mlops-training/user${USER_NUM}/iris-api \
+    --repository-names mlops-training/user${USER_NUM} \
     --region ap-northeast-2
 
 # ECR 로그인
@@ -489,7 +486,7 @@ aws ecr get-login-password --region ap-northeast-2 | \
 │  │  (Container    │         (Container Images)             │
 │  │   Registry)    │                                        │
 │  │                │                                        │
-│  │  📦 mlops-training/user{XX}/iris-api                   │
+│  │  📦 mlops-training/user{XX}                             │
 │  └────────────────┘                                        │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘

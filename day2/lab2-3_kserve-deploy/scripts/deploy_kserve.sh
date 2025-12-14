@@ -9,7 +9,7 @@
 #   source ../../scripts/setup-env.sh
 #
 #   # 2. Storage URI 설정
-#   export STORAGE_URI="s3://mlops-training-user${USER_NUM}/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model"
+#   export STORAGE_URI="s3://mlops-training-user${USER_NUM}/mlflow-artifacts/RUN_ID/artifacts/model"
 #
 #   # 3. 스크립트 실행
 #   ./scripts/deploy_kserve.sh
@@ -51,7 +51,7 @@ fi
 S3_BUCKET=${S3_BUCKET:-"mlops-training-user${USER_NUM}"}
 
 # 모델 설정
-MODEL_NAME=${MODEL_NAME:-"california-model"}
+MODEL_NAME=${MODEL_NAME:-"california-model-user${USER_NUM}"}
 
 echo ""
 echo "📋 설정 정보:"
@@ -72,7 +72,7 @@ if [ -z "$STORAGE_URI" ]; then
     echo "  aws s3 ls s3://${S3_BUCKET}/mlflow-artifacts/ --recursive | grep MLmodel"
     echo ""
     echo "그 다음 환경변수를 설정하세요:"
-    echo "  export STORAGE_URI='s3://${S3_BUCKET}/mlflow-artifacts/EXPERIMENT_ID/RUN_ID/artifacts/model'"
+    echo "  export STORAGE_URI='s3://${S3_BUCKET}/mlflow-artifacts/RUN_ID/artifacts/model'"
     echo ""
     
     # S3에서 모델 경로 자동 탐색 시도

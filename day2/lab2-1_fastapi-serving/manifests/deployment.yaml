@@ -37,7 +37,7 @@ spec:
       containers:
       - name: iris-api
         # ⚠️ 사용자별 ECR 레포지토리 경로
-        image: ${ECR_REGISTRY}/mlops-training/user${USER_NUM}/iris-api:v1
+        image: ${ECR_REGISTRY}/mlops-training/user${USER_NUM}:v1
         ports:
         - containerPort: 8000
           name: http

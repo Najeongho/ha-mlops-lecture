@@ -14,33 +14,26 @@ echo "============================================================"
 echo "  KServe 추론 테스트"
 echo "============================================================"
 
+# USER_NUM 확인
+if [ -z "$USER_NUM" ]; then
+    USER_NUM="01"
+    echo -e "${YELLOW}⚠️  USER_NUM이 설정되지 않았습니다. 기본값 사용: ${USER_NUM}${NC}"
+fi
+
 # 네임스페이스 설정
 if [ -f "/var/run/secrets/kubernetes.io/serviceaccount/namespace" ]; then
     NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 elif [ -n "$USER_NAMESPACE" ]; then
     NAMESPACE="$USER_NAMESPACE"
 else
-    NAMESPACE="kubeflow-user-example-com"
+    NAMESPACE="kubeflow-user${USER_NUM}"
 fi
 
-MODEL_NAME=${MODEL_NAME:-"california-model"}
+MODEL_NAME=${MODEL_NAME:-"california-model-user${USER_NUM}4"}
 
 echo "📁 네임스페이스: $NAMESPACE"
 echo "🤖 모델명: $MODEL_NAME"
 echo ""
-
-# InferenceService 상태 확인
-echo "📋 InferenceService 상태:"
-kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE
-echo ""
-
-READY=$(kubectl get inferenceservice $MODEL_NAME -n $NAMESPACE -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
-
-if [ "$READY" != "True" ]; then
-    echo -e "${RED}❌ InferenceService가 Ready 상태가 아닙니다.${NC}"
-    echo "   먼저 deploy_kserve.sh를 실행하세요."
-    exit 1
-fi
 
 # 테스트 방법 선택
 echo "============================================================"
@@ -124,7 +117,7 @@ else
     echo "   Pod: $POD"
     
     # 포트 포워딩 시작
-    kubectl port-forward -n $NAMESPACE pod/$POD 8080:8080 &>/dev/null &
+    kubectl port-forward -n $NAMESPACE pod/$POD 8081:8080 &>/dev/null &
     PF_PID=$!
     sleep 3
     
@@ -138,7 +131,7 @@ else
     echo ""
     
     # 테스트 실행
-    URL="http://localhost:8080/v1/models/${MODEL_NAME}:predict"
+    URL="http://localhost:8081/v1/models/${MODEL_NAME}:predict"
     echo "🔗 URL: $URL"
     echo ""
     echo "📡 추론 요청 중..."

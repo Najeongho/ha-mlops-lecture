@@ -49,7 +49,7 @@ Lab 1-2: Hello World Pipeline (40분)
 ```
 lab1-2_hello-pipeline/
 ├── README.md                    # ⭐ 이 파일 (실습 가이드)
-├── pipeline_simple_v2.py        # 파이프라인 Python 스크립트
+├── hello_pipeline.py            # 파이프라인 Python 스크립트
 ├── requirements.txt             # Python 패키지 의존성
 └── notebooks/
     └── hello_pipeline.ipynb     # Jupyter Notebook 버전
@@ -170,7 +170,7 @@ def hello_pipeline(a: int = 10, b: int = 20):
 
 ### Step 2-1: 파이프라인 스크립트 확인
 
-**파일: `pipeline_simple_v2.py`**
+**파일: `hello_pipeline.py`**
 
 ```python
 """
@@ -379,7 +379,7 @@ Final Result: 90
 - [ ] DAG (실행 흐름) 이해
 
 ### Part 2: 파이프라인 작성 (15분)
-- [ ] pipeline_simple_v2.py 코드 이해
+- [ ] hello_pipeline.py 코드 이해
 - [ ] 파이프라인 컴파일 성공
 - [ ] hello_pipeline.yaml 파일 생성 확인
 
@@ -453,7 +453,7 @@ pip install -r requirements.txt
 **해결 방법:**
 ```bash
 # 파이프라인 재컴파일
-python pipeline_simple_v2.py
+python hello_pipeline.py
 
 # YAML 파일 존재 확인
 ls -lh hello_pipeline.yaml
@@ -606,7 +606,7 @@ kubectl describe resourcequota -n kubeflow-user${USER_NUM}
 
 ```bash
 # 파이프라인 컴파일
-python pipeline_simple_v2.py
+python hello_pipeline.py
 
 # YAML 파일 확인
 cat hello_pipeline.yaml

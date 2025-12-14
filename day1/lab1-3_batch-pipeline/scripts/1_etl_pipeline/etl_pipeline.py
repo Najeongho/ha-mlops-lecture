@@ -50,18 +50,6 @@ print("=" * 60)
 # boto3 S3 클라이언트 생성
 s3_client = boto3.client('s3', region_name=AWS_REGION)
 
-try:
-    # S3 버킷 생성
-    s3_client.create_bucket(
-        Bucket=BUCKET_NAME,
-        CreateBucketConfiguration={'LocationConstraint': AWS_REGION}
-    )
-    print(f"✅ 버킷 생성 완료: {BUCKET_NAME}")
-except s3_client.exceptions.BucketAlreadyOwnedByYou:
-    print(f"✅ 버킷이 이미 존재함: {BUCKET_NAME}")
-except Exception as e:
-    print(f"⚠️  버킷 생성 오류: {e}")
-
 # Data Lake 레이어 정의
 BRONZE_LAYER = f"s3://{BUCKET_NAME}/raw/"  # 원본 데이터
 SILVER_LAYER = f"s3://{BUCKET_NAME}/processed/"  # 정제된 데이터
