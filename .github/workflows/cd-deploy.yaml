@@ -10,11 +10,11 @@ on:
   workflow_run:
     workflows: ["CI - Test & Build"]
     types: [completed]
-    branches: [main]
+    branches: [dev]
   
   # main 브랜치에 push 시 자동 실행
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - 'day3/lab3-2_monitoring-cicd/**'
       - '.github/workflows/cd-deploy.yaml'
@@ -33,16 +33,16 @@ on:
       user_namespace:
         description: 'Target user namespace (e.g., kubeflow-user01)'
         required: true
-        default: 'kubeflow-user07'
+        default: 'YOUR_NAMESPACE'
 
 env:
   AWS_REGION: ap-northeast-2
-  ECR_REGISTRY: 347880001135.dkr.ecr.ap-northeast-2.amazonaws.com
-  ECR_REPOSITORY: mlops-training/user07/iris-api
-  EKS_CLUSTER_NAME: test-eks-cluster
   MODEL_NAME: california-housing
   SOURCE_PATH: day3/lab3-2_monitoring-cicd
-  NAMESPACE: kubeflow-user07
+  ECR_REGISTRY: 'YOUR_ECR_REGISTRY'
+  ECR_REPOSITORY: 'YOUR_ECR_REPOSITORY'
+  EKS_CLUSTER_NAME: 'YOUR_EKS_CLUSTER_NAME'
+  NAMESPACE: YOUR_NAMESPACE
 
 jobs:
   # ============================================================
