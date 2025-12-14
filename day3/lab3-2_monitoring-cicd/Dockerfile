@@ -1,42 +1,32 @@
 # Dockerfile for California Housing Model Serving
 # 
-# Multi-stage build for optimized image size
+# 단일 스테이지 빌드로 패키지 설치 문제 해결
 
-# ============================================================
-# Stage 1: Builder
-# ============================================================
-FROM python:3.9-slim as builder
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy requirements first (for better caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
 
-# ============================================================
-# Stage 2: Runtime
-# ============================================================
-FROM python:3.9-slim as runtime
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-WORKDIR /app
-
-# Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+# Verify numpy is installed
+RUN python -c "import numpy; print(f'numpy version: {numpy.__version__}')"
 
 # Copy application code
 COPY src/ ./src/
-COPY scripts/ ./scripts/
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
-USER appuser
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -48,9 +38,12 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose port
 EXPOSE 8080
 
+# Switch to non-root user
+USER appuser
+
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Default command - run the serving API
 CMD ["python", "-m", "src.serving.api"]
