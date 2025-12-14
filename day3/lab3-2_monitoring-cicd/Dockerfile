@@ -1,6 +1,6 @@
 # Dockerfile for California Housing Model Serving
 # 
-# 단일 스테이지 빌드로 패키지 설치 문제 해결
+# KServe/Knative 환경에서 모델 서빙
 
 FROM python:3.9-slim
 
@@ -18,8 +18,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Verify numpy is installed
-RUN python -c "import numpy; print(f'numpy version: {numpy.__version__}')"
+# Verify critical packages are installed
+RUN python -c "import numpy; import sklearn; import fastapi; import uvicorn; print('All packages installed successfully')"
 
 # Copy application code
 COPY src/ ./src/
@@ -31,6 +31,7 @@ RUN useradd --create-home --shell /bin/bash appuser && \
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     MODEL_NAME="california-housing" \
     MODEL_VERSION="v1.0" \
     PORT=8080
@@ -42,8 +43,8 @@ EXPOSE 8080
 USER appuser
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Default command - run the serving API
-CMD ["python", "-m", "src.serving.api"]
+# Run the server using the dedicated entry point
+CMD ["python", "src/main.py"]
