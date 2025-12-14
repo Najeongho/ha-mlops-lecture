@@ -58,7 +58,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install boto3 pandas scikit-learn
+          pip install boto3 pandas scikit-learn pyarrow
       
       - name: Download and prepare data
         id: data

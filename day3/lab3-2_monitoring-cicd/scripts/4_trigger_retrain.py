@@ -20,7 +20,7 @@ from datetime import datetime
 # 설정
 PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
-GITHUB_REPO = os.getenv("GITHUB_REPO", "your-org/mlops-repo")
+GITHUB_REPO = os.getenv("GITHUB_REPO", "")
 USER_NUM = os.getenv("USER_NUM", "01")
 USER_ID = f"user{USER_NUM}"
 
