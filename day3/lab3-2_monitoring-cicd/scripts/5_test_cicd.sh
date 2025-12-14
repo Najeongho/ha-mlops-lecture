@@ -77,14 +77,14 @@ echo "  Part 2: 메트릭 수집 테스트"
 echo "============================================================"
 echo ""
 
-# 7. MAE 메트릭
-run_test "MAE 메트릭 존재" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_mae_score{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\['"
+# 7. MAE 메트릭 (빈 배열이 아닌 경우만 통과)
+run_test "MAE 메트릭 존재" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_mae_score{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\[{'"
 
-# 8. R² 메트릭
-run_test "R² 메트릭 존재" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_r2_score{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\['"
+# 8. R² 메트릭 (빈 배열이 아닌 경우만 통과)
+run_test "R² 메트릭 존재" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_r2_score{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\[{'"
 
-# 9. Prediction Total 메트릭
-run_test "Prediction 메트릭" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_prediction_total{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\['"
+# 9. Prediction Total 메트릭 (빈 배열이 아닌 경우만 통과)
+run_test "Prediction 메트릭" "curl -s '${PROMETHEUS_URL}/api/v1/query?query=model_prediction_total{user_id=\"${USER_ID}\"}' | grep -q '\"result\":\\[{'"
 
 echo ""
 echo "============================================================"
