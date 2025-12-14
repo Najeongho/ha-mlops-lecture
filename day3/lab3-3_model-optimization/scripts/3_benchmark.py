@@ -326,7 +326,7 @@ def main():
         
         print(f"\n   ✅ MLflow 기록 완료!")
         print(f"   Run ID: {run.info.run_id}")
-        print(f"   실험: {experiment_name}")
+        print(f"   실험: {EXPERIMENT_NAME}")
     
     # =========================================================================
     # 최종 결과 요약
