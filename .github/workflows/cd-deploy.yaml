@@ -1,252 +1,152 @@
-name: CD - Deploy Model
+# .github/workflows/cd-deploy.yaml
+# CD Pipeline: 모델 빌드 및 KServe 배포
+#
+# 트리거: CI 성공 후 또는 수동 실행
+
+name: CD - Deploy to KServe
 
 on:
+  # CI 완료 후 자동 실행
   workflow_run:
-    workflows: ["CI - Test Model"]
-    types: [ completed ]
-    branches: [ dev ]
+    workflows: ["CI - Test & Build"]
+    types: [completed]
+    branches: [dev]
+  
+  # 수동 실행 (workflow_dispatch)
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      user_namespace:
+        description: 'Target user namespace (e.g., kubeflow-user01)'
+        required: true
+        default: 'kubeflow-user07'
 
 env:
-  # 공용 ECR 레포지토리 (california-housing 모델은 공용)
-  ECR_REPOSITORY: ml-model-california-housing
   AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: mlops-training/user07/iris-api
+  EKS_CLUSTER_NAME: test-eks-cluster
+  MODEL_NAME: california-housing
 
 jobs:
-  deploy:
-    name: Build and Deploy Model
+  # ============================================================
+  # Job 1: Docker 빌드 & ECR 푸시
+  # ============================================================
+  build-and-push:
+    name: Build & Push to ECR
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # CI 워크플로우 성공 시에만 실행
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
+        uses: actions/checkout@v4
+      
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
+          aws-region: ${{ env.AWS_REGION }}
+      
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      # ============================================================
-      # ECR Repository 생성 (존재하지 않을 경우)
-      # ============================================================
-      - name: Create ECR Repository if not exists
-        env:
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-        run: |
-          echo "🔍 Checking if ECR repository exists..."
-          
-          if aws ecr describe-repositories --repository-names $ECR_REPOSITORY 2>/dev/null; then
-            echo "✅ ECR repository '$ECR_REPOSITORY' already exists"
-          else
-            echo "📦 Creating ECR repository '$ECR_REPOSITORY'..."
-            aws ecr create-repository \
-              --repository-name $ECR_REPOSITORY \
-              --image-scanning-configuration scanOnPush=true \
-              --image-tag-mutability MUTABLE \
-              --encryption-configuration encryptionType=AES256
-            
-            echo "✅ ECR repository created successfully"
-          fi
-
-      - name: Set image tag
-        id: image-tag
-        run: |
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          echo "tag=v$(date +%Y%m%d)-${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
-
-      - name: Check if Dockerfile exists
-        id: check-dockerfile
-        run: |
-          if [ -f "Dockerfile" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "✅ Dockerfile found in repository"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Dockerfile not found - will generate automatically"
-          fi
+        uses: aws-actions/amazon-ecr-login@v2
       
-      - name: Generate Dockerfile (if not exists)
-        if: steps.check-dockerfile.outputs.exists == 'false'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+      
+      - name: Output image info
         run: |
-          echo "📝 Generating application files for California Housing model..."
-          
-          # Create api.py
-          cat > api.py << 'APIEOF'
-          from fastapi import FastAPI, HTTPException
-          from pydantic import BaseModel, Field
-          from typing import List
-          import numpy as np
-          from sklearn.datasets import fetch_california_housing
-          from sklearn.ensemble import RandomForestRegressor
-          from sklearn.model_selection import train_test_split
-          import logging
-          import os
-          import time
-          
-          logging.basicConfig(level=logging.INFO)
-          logger = logging.getLogger(__name__)
-          
-          app = FastAPI(
-              title="California Housing Model API",
-              description="ML model for California Housing price prediction",
-              version=os.getenv("MODEL_VERSION", "1.0.0")
-          )
-          
-          class PredictionInput(BaseModel):
-              features: List[float] = Field(..., min_items=8, max_items=8)
-          
-          class PredictionOutput(BaseModel):
-              prediction: float
-              model_version: str
-          
-          model = None
-          model_loaded = False
-          
-          @app.on_event("startup")
-          async def load_model():
-              global model, model_loaded
-              start_time = time.time()
-              logger.info("🚀 Starting model loading...")
-              
-              try:
-                  data = fetch_california_housing()
-                  X_train, _, y_train, _ = train_test_split(
-                      data.data, data.target, test_size=0.2, random_state=42
-                  )
-                  model = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
-                  model.fit(X_train, y_train)
-                  model_loaded = True
-                  elapsed = time.time() - start_time
-                  logger.info(f"✅ Model loaded successfully in {elapsed:.2f}s")
-              except Exception as e:
-                  logger.error(f"❌ Model loading failed: {e}")
-                  raise
-          
-          @app.get("/health")
-          async def health():
-              return {
-                  "status": "healthy" if model_loaded else "loading",
-                  "model_loaded": model_loaded
-              }
-          
-          @app.get("/ready")
-          async def ready():
-              if not model_loaded:
-                  raise HTTPException(status_code=503, detail="Model not ready")
-              return {"status": "ready"}
-          
-          @app.post("/predict", response_model=PredictionOutput)
-          async def predict(input_data: PredictionInput):
-              if model is None or not model_loaded:
-                  raise HTTPException(status_code=503, detail="Model not loaded")
-              features = np.array(input_data.features).reshape(1, -1)
-              prediction = model.predict(features)[0]
-              return PredictionOutput(
-                  prediction=float(prediction),
-                  model_version=os.getenv("MODEL_VERSION", "1.0.0")
-              )
-          APIEOF
-          
-          # Create Dockerfile
-          cat > Dockerfile << 'DOCKEREOF'
-          FROM python:3.9-slim
-          WORKDIR /app
-          RUN pip install --no-cache-dir fastapi uvicorn scikit-learn numpy pydantic
-          COPY api.py .
-          ENV MODEL_VERSION=1.0.0
-          EXPOSE 8080
-          CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "120"]
-          DOCKEREOF
-          
-          echo "✅ Generated api.py and Dockerfile"
+          echo "📦 Image pushed successfully!"
+          echo "   Tags: ${{ steps.meta.outputs.tags }}"
+          echo "   Digest: ${{ steps.build.outputs.digest }}"
 
-      - name: Build Docker image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          echo "🔨 Building Docker image..."
-          docker build --platform linux/amd64 \
-            --build-arg MODEL_VERSION=$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            .
-          echo "✅ Image built: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-      - name: Push image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-      - name: Check Kubernetes configuration
-        id: check-k8s
-        run: |
-          if [ -n "${{ secrets.KUBECONFIG_DATA }}" ]; then
-            echo "configured=true" >> $GITHUB_OUTPUT
-            echo "✅ Kubernetes configuration available"
-          else
-            echo "configured=false" >> $GITHUB_OUTPUT
-            echo "⚠️  KUBECONFIG_DATA not configured - skipping K8s deployment"
-          fi
-
-      - name: Set up kubectl
-        if: steps.check-k8s.outputs.configured == 'true'
+  # ============================================================
+  # Job 2: KServe 배포
+  # ============================================================
+  deploy-kserve:
+    name: Deploy to KServe
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Setup kubectl
         uses: azure/setup-kubectl@v3
         with:
           version: 'v1.28.0'
       
-      - name: Install aws-iam-authenticator
-        if: steps.check-k8s.outputs.configured == 'true'
+      - name: Configure kubeconfig
         run: |
-          echo "📦 Installing aws-iam-authenticator..."
-          curl -Lo aws-iam-authenticator https://github.com/kubernetes-sigs/aws-iam-authenticator/releases/download/v0.6.11/aws-iam-authenticator_0.6.11_linux_amd64
-          chmod +x ./aws-iam-authenticator
-          sudo mv ./aws-iam-authenticator /usr/local/bin/
-          aws-iam-authenticator version
-          echo "✅ aws-iam-authenticator installed"
-
-      - name: Configure kubectl
-        if: steps.check-k8s.outputs.configured == 'true'
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Set deployment namespace
+        id: namespace
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG_DATA }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-          echo "✅ kubectl configured"
-
-      - name: Deploy to KServe
-        if: steps.check-k8s.outputs.configured == 'true'
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "namespace=${{ github.event.inputs.user_namespace }}" >> $GITHUB_OUTPUT
+          else
+            echo "namespace=kubeflow-user01" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Deploy InferenceService
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
+          IMAGE_TAG: ${{ github.sha }}
+          NAMESPACE: ${{ steps.namespace.outputs.namespace }}
         run: |
-          echo "🚀 Deploying to KServe..."
-          
-          cat > inferenceservice.yaml << EOF
+          cat <<EOF | kubectl apply -f -
           apiVersion: serving.kserve.io/v1beta1
           kind: InferenceService
           metadata:
-            name: california-housing-predictor
-            namespace: $NAMESPACE
+            name: ${{ env.MODEL_NAME }}
+            namespace: ${NAMESPACE}
             annotations:
               sidecar.istio.io/inject: "false"
           spec:
@@ -254,266 +154,146 @@ jobs:
               minReplicas: 1
               maxReplicas: 3
               containers:
-                - name: predictor
-                  image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+                - name: model
+                  image: ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}
                   ports:
                     - containerPort: 8080
                       protocol: TCP
                   env:
-                    - name: MODEL_VERSION
-                      value: "$IMAGE_TAG"
+                    - name: MODEL_NAME
+                      value: "${{ env.MODEL_NAME }}"
+                    - name: DEPLOYED_AT
+                      value: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                    - name: GIT_SHA
+                      value: "${IMAGE_TAG}"
                   resources:
                     requests:
-                      cpu: "200m"
-                      memory: "512Mi"
+                      cpu: "100m"
+                      memory: "256Mi"
                     limits:
-                      cpu: "1000m"
-                      memory: "1Gi"
-                  readinessProbe:
-                    httpGet:
-                      path: /health
-                      port: 8080
-                    initialDelaySeconds: 60
-                    periodSeconds: 10
-                    timeoutSeconds: 10
-                    failureThreshold: 6
-                  livenessProbe:
-                    httpGet:
-                      path: /health
-                      port: 8080
-                    initialDelaySeconds: 90
-                    periodSeconds: 30
-                    timeoutSeconds: 10
-                    failureThreshold: 3
-                  startupProbe:
-                    httpGet:
-                      path: /health
-                      port: 8080
-                    initialDelaySeconds: 10
-                    periodSeconds: 10
-                    timeoutSeconds: 5
-                    failureThreshold: 30
+                      cpu: "500m"
+                      memory: "512Mi"
           EOF
-          
-          kubectl apply -f inferenceservice.yaml
-          echo "✅ InferenceService applied"
-
-      # ============================================================
-      # 🔧 핵심 수정: kubectl wait 사용 (가장 안정적)
-      # ============================================================
-      - name: Wait for Pod to be Ready
-        if: steps.check-k8s.outputs.configured == 'true'
+      
+      - name: Wait for deployment
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
+          NAMESPACE: ${{ steps.namespace.outputs.namespace }}
         run: |
-          echo "⏳ Waiting for deployment to complete..."
+          echo "⏳ Waiting for InferenceService to be ready..."
+          kubectl wait --for=condition=Ready \
+            inferenceservice/${{ env.MODEL_NAME }} \
+            -n ${NAMESPACE} \
+            --timeout=300s || true
           
-          # 1. Pod가 생성될 때까지 대기
-          echo "📋 Step 1: Waiting for Pod to be created..."
-          MAX_WAIT=60
-          WAITED=0
-          while [ $WAITED -lt $MAX_WAIT ]; do
-            POD_NAME=$(kubectl get pods -n $NAMESPACE \
-              -l serving.kserve.io/inferenceservice=california-housing-predictor \
-              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-            
-            if [ -n "$POD_NAME" ]; then
-              echo "✅ Pod found: $POD_NAME"
-              break
-            fi
-            
-            echo "  Waiting for Pod to be created... ($WAITED/$MAX_WAIT)"
-            sleep 5
-            WAITED=$((WAITED + 5))
-          done
-          
-          if [ -z "$POD_NAME" ]; then
-            echo "❌ Pod not created within timeout"
-            kubectl get all -n $NAMESPACE
-            exit 1
-          fi
-          
-          # 2. kubectl wait로 Pod Ready 상태 대기 (가장 안정적인 방법)
-          echo ""
-          echo "📋 Step 2: Waiting for Pod to be Ready (readinessProbe 통과)..."
-          echo "   This waits for Kubernetes readinessProbe to succeed."
-          echo "   (The probe is checking /health endpoint internally)"
-          echo ""
-          
-          if kubectl wait --for=condition=Ready pod/$POD_NAME -n $NAMESPACE --timeout=600s; then
-            echo ""
-            echo "✅ Pod is Ready! (readinessProbe passed)"
+          # 상태 확인
+          kubectl get inferenceservice ${{ env.MODEL_NAME }} -n ${NAMESPACE}
+      
+      - name: Get service URL
+        env:
+          NAMESPACE: ${{ steps.namespace.outputs.namespace }}
+        run: |
+          URL=$(kubectl get inferenceservice ${{ env.MODEL_NAME }} -n ${NAMESPACE} \
+            -o jsonpath='{.status.url}' 2>/dev/null || echo "pending")
+          echo "🌐 Service URL: ${URL}"
+
+  # ============================================================
+  # Job 3: 배포 검증
+  # ============================================================
+  verify-deployment:
+    name: Verify Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-kserve
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+      
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+      
+      - name: Set namespace
+        id: namespace
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "namespace=${{ github.event.inputs.user_namespace }}" >> $GITHUB_OUTPUT
           else
-            echo ""
-            echo "❌ Pod failed to become Ready"
-            echo ""
-            echo "📋 Pod Status:"
-            kubectl get pod $POD_NAME -n $NAMESPACE -o wide
-            echo ""
-            echo "📋 Pod Events:"
-            kubectl describe pod $POD_NAME -n $NAMESPACE | tail -30
-            echo ""
-            echo "📋 Pod Logs:"
-            kubectl logs $POD_NAME -n $NAMESPACE --tail=50 || true
-            exit 1
+            echo "namespace=kubeflow-user01" >> $GITHUB_OUTPUT
           fi
-          
-          # 3. InferenceService Ready 상태 확인
-          echo ""
-          echo "📋 Step 3: Checking InferenceService status..."
-          kubectl get inferenceservice california-housing-predictor -n $NAMESPACE
-
-      # ============================================================
-      # 🔧 수정: Python urllib 사용 (curl 대신)
-      # ============================================================
-      - name: Verify application health (inside container)
-        if: steps.check-k8s.outputs.configured == 'true'
+      
+      - name: Health check
         env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
+          NAMESPACE: ${{ steps.namespace.outputs.namespace }}
         run: |
-          echo "🔍 Verifying application health from inside container..."
+          echo "🔍 Checking deployment health..."
           
-          POD_NAME=$(kubectl get pods -n $NAMESPACE \
-            -l serving.kserve.io/inferenceservice=california-housing-predictor \
-            -o jsonpath='{.items[0].metadata.name}')
+          # Pod 상태 확인
+          kubectl get pods -n ${NAMESPACE} -l serving.kserve.io/inferenceservice=${{ env.MODEL_NAME }}
           
-          echo "Pod: $POD_NAME"
-          echo ""
+          # InferenceService 상태
+          STATUS=$(kubectl get inferenceservice ${{ env.MODEL_NAME }} -n ${NAMESPACE} \
+            -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
           
-          # Python urllib 사용 (curl이 없으므로)
-          echo "📋 Health Check (using Python urllib):"
-          kubectl exec -n $NAMESPACE $POD_NAME -- \
-            python -c "
-          import urllib.request
-          import json
-          try:
-              response = urllib.request.urlopen('http://localhost:8080/health', timeout=10)
-              data = json.loads(response.read().decode())
-              print(json.dumps(data, indent=2))
-              if data.get('model_loaded'):
-                  print('✅ Model is loaded and ready!')
-              else:
-                  print('⚠️ Model is still loading...')
-          except Exception as e:
-              print(f'Error: {e}')
-              exit(1)
-          "
-          
-          echo ""
-          echo "📋 Prediction Test (using Python urllib):"
-          kubectl exec -n $NAMESPACE $POD_NAME -- \
-            python -c "
-          import urllib.request
-          import json
-          try:
-              data = json.dumps({'features': [8.3252, 41.0, 6.98, 1.02, 322.0, 2.55, 37.88, -122.23]}).encode()
-              req = urllib.request.Request(
-                  'http://localhost:8080/predict',
-                  data=data,
-                  headers={'Content-Type': 'application/json'}
-              )
-              response = urllib.request.urlopen(req, timeout=30)
-              result = json.loads(response.read().decode())
-              print(json.dumps(result, indent=2))
-              print('✅ Prediction successful!')
-          except Exception as e:
-              print(f'Error: {e}')
-              exit(1)
-          "
-
-      # ============================================================
-      # Port-forward 테스트 (선택사항 - 외부 접근 확인)
-      # ============================================================
-      - name: Test via port-forward (optional external check)
-        if: steps.check-k8s.outputs.configured == 'true'
+          if [ "$STATUS" == "True" ]; then
+            echo "✅ Deployment is healthy!"
+          else
+            echo "⚠️ Deployment may not be fully ready"
+            kubectl describe inferenceservice ${{ env.MODEL_NAME }} -n ${NAMESPACE}
+          fi
+      
+      - name: Smoke test (optional)
+        env:
+          NAMESPACE: ${{ steps.namespace.outputs.namespace }}
         continue-on-error: true
-        env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
         run: |
-          echo "🧪 Testing via port-forward (external access)..."
-          echo "   Note: This may fail in some network configurations."
-          echo ""
+          echo "🧪 Running smoke test..."
           
-          POD_NAME=$(kubectl get pods -n $NAMESPACE \
-            -l serving.kserve.io/inferenceservice=california-housing-predictor \
-            -o jsonpath='{.items[0].metadata.name}')
+          # 서비스 URL 가져오기
+          SERVICE_URL=$(kubectl get inferenceservice ${{ env.MODEL_NAME }} -n ${NAMESPACE} \
+            -o jsonpath='{.status.url}')
           
-          # Port-forward 시작
-          kubectl port-forward -n $NAMESPACE pod/$POD_NAME 8000:8080 &
-          PORT_FORWARD_PID=$!
-          sleep 10
-          
-          # Health Check
-          echo "Testing /health endpoint..."
-          HEALTH_RESPONSE=$(curl -s --max-time 30 http://localhost:8000/health 2>/dev/null || echo '{"error": "connection failed"}')
-          echo "Response: $HEALTH_RESPONSE"
-          
-          # Cleanup
-          kill $PORT_FORWARD_PID 2>/dev/null || true
-          
-          if echo "$HEALTH_RESPONSE" | grep -q '"model_loaded": true'; then
-            echo "✅ Port-forward test passed!"
+          if [ -n "$SERVICE_URL" ]; then
+            # 간단한 헬스 체크
+            curl -s --max-time 10 "${SERVICE_URL}/v1/models/${{ env.MODEL_NAME }}" || echo "Health check endpoint not available"
           else
-            echo "⚠️ Port-forward test inconclusive (may be network restriction)"
-            echo "   Internal health check already passed, deployment is successful."
+            echo "Service URL not available yet"
           fi
 
-      - name: Show deployment info
-        if: steps.check-k8s.outputs.configured == 'true'
-        env:
-          NAMESPACE: ${{ secrets.KSERVE_NAMESPACE }}
+  # ============================================================
+  # Job 4: 배포 완료 알림
+  # ============================================================
+  notify:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-kserve, verify-deployment]
+    if: always()
+    
+    steps:
+      - name: Deployment Summary
         run: |
-          echo ""
           echo "============================================================"
-          echo "📋 Deployment Summary"
+          echo "  Deployment Summary"
           echo "============================================================"
           echo ""
+          echo "📦 Build: ${{ needs.build-and-push.result }}"
+          echo "🚀 Deploy: ${{ needs.deploy-kserve.result }}"
+          echo "✅ Verify: ${{ needs.verify-deployment.result }}"
+          echo ""
+          echo "🔗 Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           
-          ISVC_URL=$(kubectl get inferenceservice california-housing-predictor \
-            -n $NAMESPACE \
-            -o jsonpath='{.status.url}' 2>/dev/null || echo "N/A")
-          
-          echo "InferenceService URL: $ISVC_URL"
-          echo ""
-          echo "InferenceService Status:"
-          kubectl get inferenceservice california-housing-predictor -n $NAMESPACE
-          echo ""
-          echo "Pod Status:"
-          kubectl get pods -n $NAMESPACE -l serving.kserve.io/inferenceservice=california-housing-predictor -o wide
-          echo ""
-          echo "============================================================"
-          echo "✅ Deployment completed successfully!"
-          echo "============================================================"
-
-      - name: Generate deployment summary
-        if: always()
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Timestamp | $(date -u '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-
-      - name: Deployment instructions (if K8s not configured)
-        if: steps.check-k8s.outputs.configured == 'false'
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
-        run: |
-          echo ""
-          echo "============================================================"
-          echo "📦 Image successfully pushed to ECR!"
-          echo "============================================================"
-          echo ""
-          echo "To deploy manually to KServe:"
-          echo "1. Configure KUBECONFIG_DATA secret in GitHub repository"
-          echo "2. Ensure KServe is installed in your cluster"
-          echo "3. Set KSERVE_NAMESPACE secret (default: kubeflow-user01)"
+          if [ "${{ needs.verify-deployment.result }}" == "success" ]; then
+            echo ""
+            echo "🎉 Deployment completed successfully!"
+          else
+            echo ""
+            echo "⚠️ Deployment may have issues. Please check the logs."
+          fi

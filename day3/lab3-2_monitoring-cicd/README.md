@@ -1,23 +1,24 @@
-# Lab 3-2: 모니터링 시스템 구축 & CI/CD 파이프라인 통합
-
-> **🎉 완전 작동하는 End-to-End MLOps 파이프라인!**
+# Lab 3-2: Model Drift Monitoring & CI/CD Pipeline
 
 ## 📋 실습 개요
 
 | 항목 | 내용 |
 |------|------|
-| **소요시간** | 90분 (1.5시간) |
+| **소요시간** | 90분 (Part 1: 45분 / Part 2: 45분) |
 | **난이도** | ⭐⭐⭐⭐ |
-| **목표** | Prometheus/Grafana 모니터링 + GitHub Actions CI/CD 완전 자동화 |
-| **검증 완료** | ✅ GitHub Actions 성공, ✅ KServe 배포 완료 |
+| **목표** | Prometheus/Grafana 기반 모델 모니터링 및 GitHub Actions CI/CD 자동화 |
+| **사전 조건** | Lab 3-1 완료, Monitoring Stack 배포됨 |
 
 ## 🎯 학습 목표
 
-- **Prometheus + Grafana** 기반 실시간 모니터링 시스템 구축
-- **GitHub Actions** CI/CD 파이프라인 완전 자동화
-- **KServe InferenceService** 모델 자동 배포
-- **Custom Metrics Exporter** 구현
-- **Alertmanager** 알림 시스템 설정
+이 실습을 통해 다음을 학습합니다:
+
+- **Prometheus 메트릭** 기반 Model Drift 감지
+- **Grafana 대시보드**에서 실시간 모니터링
+- **Alert Rule** 설정 및 알림 트리거
+- **GitHub Actions**를 활용한 CI/CD 파이프라인 구축
+- **자동 재학습 트리거** 시스템 구현
+- Monitoring + CI/CD **통합 MLOps 워크플로우**
 
 ---
 
@@ -25,16 +26,18 @@
 
 ```
 Lab 3-2: Monitoring & CI/CD (90분)
-├── Part 1: 모니터링 시스템 구축 (40분)
-│   ├── Prometheus 배포
-│   ├── Grafana 대시보드 구성
-│   ├── Metrics Exporter 배포
-│   └── Alertmanager 설정
-└── Part 2: CI/CD 파이프라인 (50분)
-    ├── GitHub Actions CI (Test)
-    ├── GitHub Actions CD (Deploy)
-    ├── Docker Build & ECR Push
-    └── KServe 자동 배포
+├── Part 1: Model Drift Monitoring (45분)
+│   ├── Step 1: 기존 Monitoring Stack 확인
+│   ├── Step 2: Custom Metrics 이해 및 조회
+│   ├── Step 3: Drift 시뮬레이션 & 메트릭 관찰
+│   ├── Step 4: Alert Rule 설정
+│   └── Step 5: Grafana 대시보드 활용
+└── Part 2: CI/CD Pipeline (45분)
+    ├── Step 1: GitHub Actions 이해
+    ├── Step 2: CI Pipeline (테스트/빌드)
+    ├── Step 3: CD Pipeline (자동 배포)
+    ├── Step 4: 재학습 트리거 구현
+    └── Step 5: End-to-End 통합 테스트
 ```
 
 ---
@@ -43,250 +46,435 @@ Lab 3-2: Monitoring & CI/CD (90분)
 
 ```
 lab3-2_monitoring-cicd/
-├── README.md                     # ⭐ 메인 실습 가이드
-├── requirements.txt              # Python 패키지
-├── Dockerfile                    # 모델 서빙 컨테이너
+├── README.md                          # ⭐ 이 파일 (실습 가이드)
+├── requirements.txt                   # Python 패키지
+│
+├── notebooks/
+│   ├── lab3-2_part1_monitoring.ipynb  # Part 1: Monitoring 실습
+│   └── lab3-2_part2_cicd.ipynb        # Part 2: CI/CD 실습
 │
 ├── scripts/
-│   ├── setup.sh                 # 전체 환경 설정
-│   ├── deploy-monitoring.sh     # Part 1: 모니터링 배포
-│   ├── deploy-model.sh          # Part 2: 모델 배포
-│   └── cleanup.sh               # 리소스 정리
-│
-├── code/
-│   ├── model/
-│   │   ├── train.py            # 모델 학습
-│   │   ├── api.py              # FastAPI 서빙
-│   │   └── test_api.py         # API 테스트
-│   └── monitoring/
-│       ├── metrics_exporter.py # Metrics Exporter
-│       └── test_metrics.py     # Metrics 테스트
+│   ├── 1_check_monitoring.py          # 모니터링 스택 확인
+│   ├── 2_query_metrics.py             # Prometheus 메트릭 조회
+│   ├── 3_simulate_drift.py            # Drift 시뮬레이션
+│   ├── 4_trigger_retrain.py           # 재학습 트리거
+│   └── 5_test_cicd.sh                 # CI/CD 테스트
 │
 ├── manifests/
-│   ├── monitoring/
-│   │   ├── namespace.yaml
-│   │   ├── prometheus/
-│   │   ├── grafana/
-│   │   ├── metrics-exporter/
-│   │   └── alertmanager/
-│   └── model/
-│       └── inferenceservice.yaml
+│   ├── alert-rules.yaml               # Prometheus Alert Rules
+│   └── drift-trigger-cronjob.yaml     # 정기 Drift 체크 CronJob
 │
 ├── .github/workflows/
-│   ├── ci-test.yaml           # CI 파이프라인
-│   └── cd-deploy.yaml         # CD 파이프라인
+│   ├── ci-test.yaml                   # CI: 테스트 & 빌드
+│   └── cd-deploy.yaml                 # CD: 자동 배포
 │
 ├── dashboards/
-│   └── grafana-dashboard.json # Grafana 대시보드
-│
-├── tests/
-│   ├── test_api.py
-│   └── test_metrics.py
+│   └── drift-monitoring-dashboard.json # Drift 모니터링 대시보드
 │
 └── docs/
-    ├── SETUP.md               # 환경 설정
-    ├── MONITORING.md          # 모니터링 가이드
-    ├── CI_CD.md               # CI/CD 가이드
-    └── TROUBLESHOOTING.md     # 문제 해결
+    ├── ARCHITECTURE.md                # 아키텍처 설명
+    └── TROUBLESHOOTING.md             # 문제 해결
 ```
 
 ---
 
-## 🚀 Part 1: 모니터링 시스템 구축 (40분)
+## ⚙️ 사전 준비
 
-### Step 1-1: 모니터링 스택 배포
+### 1. Monitoring Stack 확인
+
+**이 실습은 기 구축된 Prometheus/Grafana를 활용합니다.**
 
 ```bash
-# 1. Lab 디렉토리로 이동
-cd lab3-2_monitoring-cicd
-
-# 2. 모니터링 배포
-./scripts/deploy-monitoring.sh
-
-# 3. 상태 확인
-kubectl get pods -n monitoring-system
+# Monitoring Pod 상태 확인
+kubectl get pods -n monitoring
 
 # 예상 출력:
-# prometheus-server-xxx     1/1  Running  0  2m
-# grafana-xxx               1/1  Running  0  2m
-# metrics-exporter-xxx      1/1  Running  0  2m
-# alertmanager-xxx          1/1  Running  0  2m
+# NAME                            READY   STATUS    RESTARTS   AGE
+# prometheus-xxx                  1/1     Running   0          1h
+# grafana-xxx                     1/1     Running   0          1h
+# alertmanager-xxx                1/1     Running   0          1h
 ```
 
-### Step 1-2: Grafana 대시보드 접속
+### 2. 환경 변수 설정
 
 ```bash
-# Port-forward
-kubectl port-forward -n monitoring svc/grafana 3000:3000
+# 본인의 사용자 번호로 설정
+export USER_NUM="01"  # ⚠️ 본인 번호로 변경!
+export NAMESPACE="kubeflow-user${USER_NUM}"
 
-# 브라우저: http://localhost:3000
-# ID: admin
-# PW: admin
-
-# Dashboard Import: dashboards/grafana-dashboard.json
+echo "사용자: user${USER_NUM}"
+echo "네임스페이스: ${NAMESPACE}"
 ```
 
-### Step 1-3: Prometheus 메트릭 확인
+### 3. 포트포워딩 (터미널에서)
 
 ```bash
+# Prometheus (9090)
+kubectl port-forward -n monitoring svc/prometheus 9090:9090 &
+
+# Grafana (3000)
+kubectl port-forward -n monitoring svc/grafana 3000:3000 &
+
+# 접속 확인
+echo "Prometheus: http://localhost:9090"
+echo "Grafana: http://localhost:3000 (user${USER_NUM} / mlops2025!)"
+```
+
+---
+
+## 🚀 Part 1: Model Drift Monitoring (45분)
+
+### 📌 학습 목표
+- Prometheus에서 모델 메트릭 조회
+- Drift 감지를 위한 메트릭 이해
+- Alert Rule 설정 및 테스트
+- Grafana 대시보드 활용
+
+### Step 1-1: Monitoring Stack 확인
+
+```bash
+# scripts 디렉토리로 이동
+cd lab3-2_monitoring-cicd
+
+# 모니터링 스택 상태 확인
+python scripts/1_check_monitoring.py
+```
+
+**예상 출력:**
+```
+============================================================
+  Monitoring Stack Status Check
+============================================================
+
+✅ Prometheus: Running (1/1)
+✅ Grafana: Running (1/1)
+✅ Alertmanager: Running (1/1)
+✅ Metrics Exporter (user01): Running (1/1)
+
+📊 Prometheus Targets:
+  - metrics-user01: UP
+  - metrics-user02: UP
+  ...
+
+✅ 모든 컴포넌트가 정상입니다!
+```
+
+### Step 1-2: Prometheus 메트릭 조회
+
+```bash
+python scripts/2_query_metrics.py
+```
+
+**예상 출력:**
+```
+============================================================
+  Model Metrics Query
+============================================================
+
+📊 model_mae_score (현재 MAE):
+  user01: 0.3850
+  user02: 0.3900
+  ...
+
+📊 model_r2_score (현재 R²):
+  user01: 0.8150
+  user02: 0.8100
+  ...
+
+📊 model_prediction_total (예측 횟수):
+  user01: 15420 (success), 12 (error)
+  ...
+```
+
+### Step 1-3: Drift 시뮬레이션
+
+의도적으로 메트릭을 변경하여 Drift를 시뮬레이션합니다.
+
+```bash
+python scripts/3_simulate_drift.py --user user${USER_NUM} --drift-level high
+```
+
+**예상 출력:**
+```
+============================================================
+  Drift Simulation for user01
+============================================================
+
+📉 Before Drift:
+  MAE: 0.3850
+  R²:  0.8150
+
+🔄 Simulating HIGH drift...
+  - Increasing MAE by 30%
+  - Decreasing R² by 15%
+
+📈 After Drift:
+  MAE: 0.5005 (⚠️ 임계값 0.45 초과!)
+  R²:  0.6928 (⚠️ 임계값 0.75 미만!)
+
+🚨 Alert 조건 충족! Prometheus Alert가 발생합니다.
+```
+
+### Step 1-4: Alert Rule 확인
+
+```bash
+# Prometheus Alert Rules 확인
+kubectl get configmap prometheus-config -n monitoring -o yaml | grep -A 30 "alert_rules"
+```
+
+**주요 Alert Rules:**
+```yaml
+- alert: HighModelMAE
+  expr: model_mae_score > 0.45
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "High MAE detected for {{ $labels.user_id }}"
+
+- alert: LowModelR2
+  expr: model_r2_score < 0.75
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: "Low R² score for {{ $labels.user_id }}"
+```
+
+### Step 1-5: Grafana 대시보드 활용
+
+1. http://localhost:3000 접속
+2. `user${USER_NUM}` / `mlops2025!` 로그인
+3. **MLOps Multi-Tenant Dashboard** 선택
+4. 상단 **User ID** 드롭다운에서 본인 선택
+5. Drift 시뮬레이션 후 메트릭 변화 관찰
+
+---
+
+## 🔄 Part 2: CI/CD Pipeline (45분)
+
+### 📌 학습 목표
+- GitHub Actions 워크플로우 이해
+- CI Pipeline (테스트, 빌드, 품질 검사)
+- CD Pipeline (자동 배포)
+- Drift 기반 자동 재학습 트리거
+
+### Step 2-1: GitHub Actions 이해
+
+**CI/CD 아키텍처:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GitHub Actions CI/CD                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌────────────┐    ┌────────────┐    ┌────────────┐        │
+│  │   Push     │───►│   CI Job   │───►│   CD Job   │        │
+│  │  to main   │    │  (Test)    │    │  (Deploy)  │        │
+│  └────────────┘    └────────────┘    └────────────┘        │
+│                          │                  │               │
+│                          ▼                  ▼               │
+│                    ┌──────────┐      ┌───────────┐         │
+│                    │ Unit Test│      │ Build &   │         │
+│                    │ Lint     │      │ Push ECR  │         │
+│                    │ Coverage │      │ Deploy    │         │
+│                    └──────────┘      │ KServe    │         │
+│                                      └───────────┘         │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │              Drift-based Auto Retrain                  │ │
+│  │  ┌──────────┐    ┌──────────┐    ┌──────────┐         │ │
+│  │  │Prometheus│───►│  Alert   │───►│ Trigger  │         │ │
+│  │  │ Metrics  │    │ Manager  │    │ Retrain  │         │ │
+│  │  └──────────┘    └──────────┘    └──────────┘         │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Step 2-2: CI Pipeline 분석
+
+`.github/workflows/ci-test.yaml` 구조:
+
+```yaml
+name: CI - Test & Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run tests
+        run: pytest tests/ -v --cov=src
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+```
+
+### Step 2-3: CD Pipeline 분석
+
+`.github/workflows/cd-deploy.yaml` 구조:
+
+```yaml
+name: CD - Deploy to KServe
+
+on:
+  workflow_run:
+    workflows: ["CI - Test & Build"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build & Push to ECR
+        run: |
+          docker build -t $ECR_REPO:$VERSION .
+          docker push $ECR_REPO:$VERSION
+      - name: Deploy to KServe
+        run: |
+          kubectl apply -f manifests/inferenceservice.yaml
+```
+
+### Step 2-4: 재학습 트리거 구현
+
+Drift 감지 시 자동 재학습을 트리거합니다.
+
+```bash
+python scripts/4_trigger_retrain.py --check-drift --threshold 0.45
+```
+
+**예상 출력:**
+```
+============================================================
+  Auto-Retrain Trigger Check
+============================================================
+
+📊 Current Metrics:
+  MAE: 0.5005
+  R²:  0.6928
+
+⚠️ Drift detected! MAE > 0.45
+
+🚀 Triggering retrain pipeline...
+  - Creating GitHub workflow dispatch event
+  - Pipeline: retrain-model.yaml
+  - Parameters: drift_score=0.5005
+
+✅ Retrain triggered successfully!
+   Run ID: 12345678
+   Monitor at: https://github.com/your-repo/actions/runs/12345678
+```
+
+### Step 2-5: End-to-End 테스트
+
+전체 워크플로우를 테스트합니다.
+
+```bash
+./scripts/5_test_cicd.sh
+```
+
+---
+
+## 📊 통합 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      MLOps Monitoring & CI/CD                        │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐           │
+│  │   Model     │────►│  Metrics    │────►│ Prometheus  │           │
+│  │  Serving    │     │  Exporter   │     │   Server    │           │
+│  │  (KServe)   │     │             │     │             │           │
+│  └─────────────┘     └─────────────┘     └──────┬──────┘           │
+│                                                  │                   │
+│                                                  ▼                   │
+│                      ┌─────────────┐     ┌─────────────┐           │
+│                      │   Grafana   │◄────│    Alert    │           │
+│                      │  Dashboard  │     │   Manager   │           │
+│                      └─────────────┘     └──────┬──────┘           │
+│                                                  │                   │
+│                                                  ▼                   │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐           │
+│  │   GitHub    │◄────│   Webhook   │◄────│   Retrain   │           │
+│  │   Actions   │     │   Trigger   │     │   Decision  │           │
+│  └──────┬──────┘     └─────────────┘     └─────────────┘           │
+│         │                                                            │
+│         ▼                                                            │
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐           │
+│  │  CI: Test   │────►│  CD: Build  │────►│  CD: Deploy │           │
+│  │   & Lint    │     │  & Push ECR │     │  to KServe  │           │
+│  └─────────────┘     └─────────────┘     └─────────────┘           │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## ✅ 완료 체크리스트
+
+### Part 1: Monitoring
+- [ ] Monitoring Stack 상태 확인 완료
+- [ ] Prometheus에서 메트릭 조회 성공
+- [ ] Drift 시뮬레이션 실행
+- [ ] Alert 발생 확인 (Prometheus UI)
+- [ ] Grafana 대시보드에서 메트릭 변화 관찰
+
+### Part 2: CI/CD
+- [ ] GitHub Actions 워크플로우 이해
+- [ ] CI Pipeline 구조 분석
+- [ ] CD Pipeline 구조 분석
+- [ ] 재학습 트리거 테스트
+- [ ] End-to-End 통합 테스트
+
+---
+
+## 🛠️ 문제 해결
+
+### Prometheus 연결 실패
+```bash
+# 포트포워딩 확인
 kubectl port-forward -n monitoring svc/prometheus 9090:9090
 
-# 브라우저: http://localhost:9090
-# Query: model_prediction_count
+# Pod 상태 확인
+kubectl get pods -n monitoring -l app=prometheus
 ```
 
----
-
-## 🚀 Part 2: CI/CD 파이프라인 구축 (50분)
-
-### Step 2-1: GitHub Repository 설정
-
+### Grafana 로그인 실패
 ```bash
-# 1. GitHub에서 새 Repository 생성
-# https://github.com/new
-
-# 2. 로컬에서 Push
-git init
-git add .
-git commit -m "feat: Add MLOps monitoring and CI/CD pipeline"
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-git push -u origin main
+# 비밀번호: mlops2025!
+# 계정: user01 ~ user15, user20
 ```
 
-### Step 2-2: GitHub Secrets 설정
-
-GitHub → Settings → Secrets → New repository secret:
-
-**필수 (기본 기능):**
-```
-AWS_ACCESS_KEY_ID: AKIA...
-AWS_SECRET_ACCESS_KEY: wJalrXUtn...
-AWS_REGION: ap-northeast-2
-```
-
-**선택 (KServe 배포):**
-```
-KUBECONFIG_DATA: <base64 encoded kubeconfig>
-KSERVE_NAMESPACE: kubeflow-user01
-SLACK_WEBHOOK_URL: https://hooks.slack.com/...
-```
-
-### Step 2-3: CI/CD 파이프라인 확인
-
+### 메트릭이 보이지 않음
 ```bash
-# Git push → GitHub Actions 자동 실행
-git push
+# Metrics Exporter Pod 확인
+kubectl get pods -n kubeflow-user${USER_NUM} -l app=metrics-exporter
 
-# GitHub → Actions 탭 확인
-# ✅ CI Pipeline: Lint, Test, Coverage
-# ✅ CD Pipeline: Build, ECR Push, KServe Deploy
+# 로그 확인
+kubectl logs -n kubeflow-user${USER_NUM} -l app=metrics-exporter -c exporter
 ```
 
 ---
 
-## ✅ 검증 방법
+## 📚 다음 단계
 
-### 1. GitHub Actions 성공 확인
-
-**사용자 제공 스크린샷 확인:**
-- ✅ Build and Deploy Model: **성공** (3m 53s)
-- ✅ Post Login to Amazon ECR: **완료**
-- ✅ Post Configure AWS credentials: **완료**
-- ✅ Post Set up Python: **완료**
-- ✅ Post Checkout code: **완료**
-
-### 2. KServe InferenceService 확인
-
-**사용자 제공 kubectl 확인:**
-```bash
-$ kubectl get inferenceservice -n kubeflow-user01
-NAME                            URL                                                 READY   PREV   LATEST
-california-housing-predictor    http://california-housing-predictor-...example.com  True           100
-california-model                http://california-model-...example.com              True           100
-```
-
-✅ **READY: True** - 정상 작동!
-
-### 3. 모델 API 테스트
-
-```bash
-# Port-forward
-kubectl port-forward -n kubeflow-user01 \
-  svc/california-housing-predictor 8000:80
-
-# Health Check
-curl http://localhost:8000/health
-# {"status":"healthy","model_loaded":true}
-
-# Prediction
-curl -X POST http://localhost:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"features":[8.3252,41.0,6.98,1.02,322.0,2.55,37.88,-122.23]}'
-# {"prediction":4.526,"model_version":"v20251209-xxx",...}
-```
+Lab 3-2 완료 후:
+- **Lab 3-3**: Model Optimization (ONNX, 양자화)
+- **프로젝트 실습**: 팀별 End-to-End MLOps 파이프라인 구축
 
 ---
 
-## 🎓 학습 내용 정리
-
-### Part 1: 모니터링 ✅
-- Prometheus 메트릭 수집
-- Grafana 대시보드 시각화
-- Custom Metrics Exporter
-- Alertmanager 알림
-
-### Part 2: CI/CD ✅
-- GitHub Actions CI (8개 테스트)
-- GitHub Actions CD (자동 배포)
-- Docker 자동 빌드 & ECR Push
-- KServe 자동 배포
-
----
-
-## 📚 참고 문서
-
-- [docs/SETUP.md](docs/SETUP.md) - 환경 설정
-- [docs/MONITORING.md](docs/MONITORING.md) - 모니터링
-- [docs/CI_CD.md](docs/CI_CD.md) - CI/CD 가이드
-- [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) - 문제 해결
-- [docs/KSERVE_TIMEOUT_FIX.md](docs/KSERVE_TIMEOUT_FIX.md) - KServe 타임아웃 해결
-- [docs/KUBERNETES_AUTH_FIX.md](docs/KUBERNETES_AUTH_FIX.md) - K8s 인증 해결
-
----
-
-## 💡 완료 체크리스트
-
-- [ ] Part 1: 모니터링 시스템 배포
-  - [ ] Prometheus 실행 확인
-  - [ ] Grafana 대시보드 접속
-  - [ ] Metrics 확인
-  - [ ] Alertmanager 설정
-
-- [ ] Part 2: CI/CD 파이프라인
-  - [ ] GitHub Repository 설정
-  - [ ] Secrets 설정
-  - [ ] CI 파이프라인 성공
-  - [ ] CD 파이프라인 성공
-  - [ ] ECR 이미지 확인
-  - [ ] KServe 배포 확인
-  - [ ] API 테스트 성공
-
----
-
-## 🎉 실습 완료!
-
-**축하합니다! 완전 자동화된 MLOps 파이프라인을 구축했습니다!**
-
-- ✅ 실시간 모니터링 (Prometheus + Grafana)
-- ✅ 자동화된 CI/CD (GitHub Actions)
-- ✅ 자동 배포 (KServe)
-- ✅ 실제 작동 확인 (사용자 스크린샷)
-
-### 다음 단계
-- Day 3 프로젝트 실습으로 이동
-
----
-
-© 2025 현대오토에버 MLOps Training  
-**Version**: 12.0 (KServe Timeout 해결 - End-to-End Complete!)  
-**Status**: ✅ Production Ready - **사용자 검증 완료!**
+© 2025 현대오토에버 MLOps Training
