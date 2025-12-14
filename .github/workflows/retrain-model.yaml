@@ -344,6 +344,7 @@ jobs:
       - name: Trigger CD Pipeline
         uses: peter-evans/repository-dispatch@v3
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           event-type: model-retrained
           client-payload: |
             {
