@@ -33,6 +33,8 @@ env:
   ECR_REPOSITORY: mlops-training/user07/iris-api
   EKS_CLUSTER_NAME: test-eks-cluster
   MODEL_NAME: california-housing
+  SOURCE_PATH: day3/lab3-2_monitoring-cicd
+  NAMESPACE: kubeflow-user07
 
 jobs:
   # ============================================================
@@ -80,7 +82,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ env.SOURCE_PATH }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -132,7 +134,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "namespace=${{ github.event.inputs.user_namespace }}" >> $GITHUB_OUTPUT
           else
-            echo "namespace=kubeflow-user07" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.NAMESPACE }}" >> $GITHUB_OUTPUT
           fi
       
       - name: Deploy InferenceService
@@ -227,7 +229,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "namespace=${{ github.event.inputs.user_namespace }}" >> $GITHUB_OUTPUT
           else
-            echo "namespace=kubeflow-user01" >> $GITHUB_OUTPUT
+            echo "namespace=${{ env.NAMESPACE }}" >> $GITHUB_OUTPUT
           fi
       
       - name: Health check

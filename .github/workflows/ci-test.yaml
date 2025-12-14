@@ -18,6 +18,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.9'
+  SOURCE_PATH: day3/lab3-2_monitoring-cicd
 
 jobs:
   # ============================================================
@@ -44,19 +45,19 @@ jobs:
       
       - name: Run flake8 (syntax errors)
         run: |
-          flake8 day3/lab3-2_monitoring-cicd/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 ${{ env.SOURCE_PATH }}/src/ --count --select=E9,F63,F7,F82 --show-source --statistics
       
       - name: Run flake8 (style check)
         run: |
-          flake8 day3/lab3-2_monitoring-cicd/src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          flake8 ${{ env.SOURCE_PATH }}/src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       
       - name: Check formatting with black
         run: |
-          black --check --diff day3/lab3-2_monitoring-cicd/src/ || echo "Formatting issues found"
+          black --check --diff ${{ env.SOURCE_PATH }}/src/ || echo "Formatting issues found"
       
       - name: Check imports with isort
         run: |
-          isort --check-only --diff day3/lab3-2_monitoring-cicd/src/ || echo "Import order issues found"
+          isort --check-only --diff ${{ env.SOURCE_PATH }}/src/ || echo "Import order issues found"
 
   # ============================================================
   # Job 2: 단위 테스트
@@ -84,7 +85,7 @@ jobs:
       
       - name: Run unit tests
         run: |
-          pytest day3/lab3-2_monitoring-cicd/tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
+          pytest ${{ env.SOURCE_PATH }}/tests/ -v --cov=src --cov-report=xml --cov-report=html --cov-report=term-missing
         env:
           PYTHONPATH: ${{ github.workspace }}
       
@@ -203,7 +204,7 @@ jobs:
       - name: Build Docker image (test)
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ env.SOURCE_PATH }}
           push: false
           tags: mlops-model:test
           cache-from: type=gha
