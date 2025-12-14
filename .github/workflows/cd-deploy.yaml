@@ -30,6 +30,7 @@ on:
 
 env:
   AWS_REGION: ap-northeast-2
+  ECR_REGISTRY: 347880001135.dkr.ecr.ap-northeast-2.amazonaws.com
   ECR_REPOSITORY: mlops-training/user07/iris-api
   EKS_CLUSTER_NAME: test-eks-cluster
   MODEL_NAME: california-housing
@@ -65,18 +66,13 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       
+      - name: Create ECR repository if not exists
+        run: |
+          aws ecr describe-repositories --repository-names ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }} 2>/dev/null || \
+          aws ecr create-repository --repository-name ${{ env.ECR_REPOSITORY }} --region ${{ env.AWS_REGION }}
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}
-          tags: |
-            type=sha,prefix=
-            type=ref,event=branch
-            type=raw,value=latest,enable={{is_default_branch}}
       
       - name: Build and push
         id: build
@@ -84,8 +80,9 @@ jobs:
         with:
           context: ${{ env.SOURCE_PATH }}
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
@@ -93,7 +90,7 @@ jobs:
       - name: Output image info
         run: |
           echo "📦 Image pushed successfully!"
-          echo "   Tags: ${{ steps.meta.outputs.tags }}"
+          echo "   Image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
           echo "   Digest: ${{ steps.build.outputs.digest }}"
 
   # ============================================================
@@ -139,7 +136,6 @@ jobs:
       
       - name: Deploy InferenceService
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
           NAMESPACE: ${{ steps.namespace.outputs.namespace }}
         run: |
@@ -156,8 +152,8 @@ jobs:
               minReplicas: 1
               maxReplicas: 3
               containers:
-                - name: model
-                  image: ${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}
+                - name: kserve-container
+                  image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${IMAGE_TAG}
                   ports:
                     - containerPort: 8080
                       protocol: TCP
